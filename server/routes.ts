@@ -67,9 +67,9 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Get daily statistics
+  // Get daily statistics with dynamic date range
   app.get("/api/stats/daily", async (req, res) => {
-    const days = 7;
+    const days = parseInt(req.query.days as string) || 7;
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
@@ -88,7 +88,34 @@ export function registerRoutes(app: Express): Server {
     res.json({ daily: stats });
   });
 
-  // New route for call screening
+  // Get call distribution statistics
+  app.get("/api/stats/distribution", async (req, res) => {
+    // Hourly distribution
+    const hourlyStats = await db
+      .select({
+        hour: sql<number>`EXTRACT(HOUR FROM ${callLogs.timestamp})::integer`,
+        count: sql<number>`count(*)`,
+      })
+      .from(callLogs)
+      .groupBy(sql`EXTRACT(HOUR FROM ${callLogs.timestamp})`)
+      .orderBy(sql`EXTRACT(HOUR FROM ${callLogs.timestamp})`);
+
+    // Call types distribution
+    const typeStats = await db
+      .select({
+        name: callLogs.action,
+        value: sql<number>`count(*)`,
+      })
+      .from(callLogs)
+      .groupBy(callLogs.action);
+
+    res.json({
+      hourly: hourlyStats,
+      types: typeStats,
+    });
+  });
+
+  // Screen call
   app.post("/api/screen", async (req, res) => {
     const { phoneNumber } = req.body;
 
