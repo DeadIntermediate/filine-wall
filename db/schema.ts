@@ -9,6 +9,9 @@ export const phoneNumbers = pgTable("phone_numbers", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   active: boolean("active").default(true),
   dncStatus: jsonb("dnc_status"), // Store DNC registry information
+  reputationScore: decimal("reputation_score", { precision: 5, scale: 2 }).default('50'),
+  lastScoreUpdate: timestamp("last_score_update").defaultNow(),
+  scoreFactors: jsonb("score_factors"), // Store detailed scoring factors
 });
 
 export const callLogs = pgTable("call_logs", {

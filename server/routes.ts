@@ -4,6 +4,7 @@ import { db } from "@db";
 import { desc, eq, sql } from "drizzle-orm";
 import { phoneNumbers, callLogs, spamReports } from "@db/schema";
 import { screenCall, logCall } from "./services/callScreening";
+import { calculateReputationScore } from "./services/reputationScoring";
 
 export function registerRoutes(app: Express): Server {
   // Get all phone numbers
@@ -236,6 +237,32 @@ export function registerRoutes(app: Express): Server {
     }
 
     res.json(updated);
+  });
+
+  // Get reputation score for a phone number
+  app.get("/api/numbers/:number/reputation", async (req, res) => {
+    const { number } = req.params;
+
+    try {
+      const reputation = await calculateReputationScore(number);
+      res.json(reputation);
+    } catch (error) {
+      console.error("Error calculating reputation score:", error);
+      res.status(500).json({ message: "Error calculating reputation score" });
+    }
+  });
+
+  // Update reputation score (recalculate)
+  app.post("/api/numbers/:number/reputation/refresh", async (req, res) => {
+    const { number } = req.params;
+
+    try {
+      const reputation = await calculateReputationScore(number);
+      res.json(reputation);
+    } catch (error) {
+      console.error("Error refreshing reputation score:", error);
+      res.status(500).json({ message: "Error refreshing reputation score" });
+    }
   });
 
   const httpServer = createServer(app);
