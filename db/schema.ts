@@ -36,6 +36,17 @@ export const spamReports = pgTable("spam_reports", {
   metadata: jsonb("metadata"), // Additional report details
 });
 
+export const verificationCodes = pgTable("verification_codes", {
+  id: serial("id").primaryKey(),
+  phoneNumber: text("phone_number").notNull(),
+  code: text("code").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").default(false),
+  verifiedAt: timestamp("verified_at"),
+  metadata: jsonb("metadata"), // Store additional verification details
+});
+
 // Schemas for validation
 export const insertPhoneNumberSchema = createInsertSchema(phoneNumbers);
 export const selectPhoneNumberSchema = createSelectSchema(phoneNumbers);
@@ -43,6 +54,8 @@ export const insertCallLogSchema = createInsertSchema(callLogs);
 export const selectCallLogSchema = createSelectSchema(callLogs);
 export const insertSpamReportSchema = createInsertSchema(spamReports);
 export const selectSpamReportSchema = createSelectSchema(spamReports);
+export const insertVerificationCodeSchema = createInsertSchema(verificationCodes);
+export const selectVerificationCodeSchema = createSelectSchema(verificationCodes);
 
 // Types
 export type PhoneNumber = typeof phoneNumbers.$inferSelect;
@@ -51,3 +64,5 @@ export type CallLog = typeof callLogs.$inferSelect;
 export type InsertCallLog = typeof callLogs.$inferInsert;
 export type SpamReport = typeof spamReports.$inferSelect;
 export type InsertSpamReport = typeof spamReports.$inferInsert;
+export type VerificationCode = typeof verificationCodes.$inferSelect;
+export type InsertVerificationCode = typeof verificationCodes.$inferInsert;

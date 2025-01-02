@@ -5,6 +5,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { phoneNumbers, callLogs, spamReports } from "@db/schema";
 import { screenCall, logCall } from "./services/callScreening";
 import { calculateReputationScore } from "./services/reputationScoring";
+import { verifyCode, getVerificationAttempts } from "./services/callerVerification";
 
 export function registerRoutes(app: Express): Server {
   // Get all phone numbers
@@ -17,11 +18,15 @@ export function registerRoutes(app: Express): Server {
 
   // Add new phone number
   app.post("/api/numbers", async (req, res) => {
-    const { number, type } = req.body;
-    const result = await db.insert(phoneNumbers).values({
-      number,
-      type,
-    }).returning();
+    const { number, type, description } = req.body;
+    const result = await db
+      .insert(phoneNumbers)
+      .values({
+        number,
+        type,
+        description,
+      })
+      .returning();
     res.json(result[0]);
   });
 
@@ -30,15 +35,6 @@ export function registerRoutes(app: Express): Server {
     const { id } = req.params;
     await db.delete(phoneNumbers).where(eq(phoneNumbers.id, parseInt(id)));
     res.json({ success: true });
-  });
-
-  // Get call logs
-  app.get("/api/calls", async (req, res) => {
-    const logs = await db.query.callLogs.findMany({
-      orderBy: desc(callLogs.timestamp),
-      limit: 100,
-    });
-    res.json(logs);
   });
 
   // Get statistics
@@ -89,52 +85,7 @@ export function registerRoutes(app: Express): Server {
     res.json({ daily: stats });
   });
 
-  // Get call distribution statistics
-  app.get("/api/stats/distribution", async (req, res) => {
-    // Hourly distribution
-    const hourlyStats = await db
-      .select({
-        hour: sql<number>`EXTRACT(HOUR FROM ${callLogs.timestamp})::integer`,
-        count: sql<number>`count(*)`,
-      })
-      .from(callLogs)
-      .groupBy(sql`EXTRACT(HOUR FROM ${callLogs.timestamp})`)
-      .orderBy(sql`EXTRACT(HOUR FROM ${callLogs.timestamp})`);
-
-    // Call types distribution
-    const typeStats = await db
-      .select({
-        name: callLogs.action,
-        value: sql<number>`count(*)`,
-      })
-      .from(callLogs)
-      .groupBy(callLogs.action);
-
-    res.json({
-      hourly: hourlyStats,
-      types: typeStats,
-    });
-  });
-
-  // Screen call
-  app.post("/api/screen", async (req, res) => {
-    const { phoneNumber } = req.body;
-
-    if (!phoneNumber) {
-      return res.status(400).json({ message: "Phone number is required" });
-    }
-
-    try {
-      const result = await screenCall(phoneNumber);
-      await logCall(phoneNumber, result);
-      res.json(result);
-    } catch (error) {
-      console.error("Error screening call:", error);
-      res.status(500).json({ message: "Error screening call" });
-    }
-  });
-
-  // New heatmap endpoint
+  // Get calls heatmap data
   app.get("/api/calls/heatmap", async (req, res) => {
     const timeRange = parseInt(req.query.range as string) || 24; // Default to last 24 hours
     const startTime = new Date();
@@ -161,15 +112,12 @@ export function registerRoutes(app: Express): Server {
     res.json(locations);
   });
 
-
   // Get all spam reports
   app.get("/api/reports", async (req, res) => {
-    const reports = await db.query.spamReports.findMany({
-      orderBy: [
-        { confirmations: "desc" },
-        { reportedAt: "desc" }
-      ],
-    });
+    const reports = await db
+      .select()
+      .from(spamReports)
+      .orderBy(desc(spamReports.confirmations), desc(spamReports.reportedAt));
     res.json(reports);
   });
 
@@ -229,11 +177,20 @@ export function registerRoutes(app: Express): Server {
 
     // If report is verified, automatically add to blacklist
     if (updated.status === "verified") {
-      await db.insert(phoneNumbers).values({
-        number: updated.phoneNumber,
-        type: "blacklist",
-        description: `Automatically blocked based on community reports. Category: ${updated.category}`,
-      });
+      await db
+        .insert(phoneNumbers)
+        .values({
+          number: updated.phoneNumber,
+          type: "blacklist",
+          description: `Automatically blocked based on community reports. Category: ${updated.category}`,
+        })
+        .onConflictDoUpdate({
+          target: phoneNumbers.number,
+          set: {
+            type: "blacklist",
+            description: `Automatically blocked based on community reports. Category: ${updated.category}`,
+          },
+        });
     }
 
     res.json(updated);
@@ -263,6 +220,64 @@ export function registerRoutes(app: Express): Server {
       console.error("Error refreshing reputation score:", error);
       res.status(500).json({ message: "Error refreshing reputation score" });
     }
+  });
+
+  // Screen call
+  app.post("/api/screen", async (req, res) => {
+    const { phoneNumber } = req.body;
+
+    if (!phoneNumber) {
+      return res.status(400).json({ message: "Phone number is required" });
+    }
+
+    try {
+      const result = await screenCall(phoneNumber);
+      await logCall(phoneNumber, result);
+      res.json(result);
+    } catch (error) {
+      console.error("Error screening call:", error);
+      res.status(500).json({ message: "Error screening call" });
+    }
+  });
+
+  // Verify caller identity
+  app.post("/api/verify", async (req, res) => {
+    const { phoneNumber, code } = req.body;
+
+    if (!phoneNumber || !code) {
+      return res.status(400).json({ message: "Phone number and verification code are required" });
+    }
+
+    // Check for too many attempts
+    const attempts = await getVerificationAttempts(phoneNumber);
+    if (attempts >= 5) {
+      return res.status(429).json({
+        message: "Too many verification attempts. Please try again after 24 hours."
+      });
+    }
+
+    try {
+      const result = await verifyCode(phoneNumber, code);
+      res.json(result);
+    } catch (error) {
+      console.error("Error verifying caller:", error);
+      res.status(500).json({ message: "Error verifying caller" });
+    }
+  });
+
+  // Get verification status
+  app.get("/api/verify/:phoneNumber/status", async (req, res) => {
+    const { phoneNumber } = req.params;
+
+    const [number] = await db
+      .select()
+      .from(phoneNumbers)
+      .where(eq(phoneNumbers.number, phoneNumber));
+
+    res.json({
+      isVerified: number?.type === "whitelist",
+      verifiedAt: number?.createdAt,
+    });
   });
 
   const httpServer = createServer(app);
