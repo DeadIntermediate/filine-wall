@@ -3,12 +3,17 @@ import { eq } from "drizzle-orm";
 import { phoneNumbers, callLogs } from "@db/schema";
 import { verifyPhoneNumber } from "./phoneVerification";
 import { predictSpam } from "./spamPrediction";
+import { dncRegistry } from "./dncRegistry";
 
 interface ScreeningResult {
   action: "blocked" | "allowed";
   reason: string;
   risk: number;
   features?: string[];
+  dncStatus?: {
+    isRegistered: boolean;
+    registrationDate?: Date;
+  };
 }
 
 export async function screenCall(phoneNumber: string): Promise<ScreeningResult> {
@@ -23,6 +28,25 @@ export async function screenCall(phoneNumber: string): Promise<ScreeningResult> 
       reason: "Number is blacklisted",
       risk: 1
     };
+  }
+
+  // Check DNC registry
+  try {
+    const dncCheck = await dncRegistry.checkNumber(phoneNumber);
+    if (dncCheck.isRegistered) {
+      return {
+        action: "blocked",
+        reason: "Number is registered in Do Not Call registry",
+        risk: 1,
+        dncStatus: {
+          isRegistered: true,
+          registrationDate: dncCheck.registrationDate
+        }
+      };
+    }
+  } catch (error) {
+    console.error("DNC check failed:", error);
+    // Continue with other checks if DNC check fails
   }
 
   // Verify number
@@ -71,10 +95,11 @@ export async function logCall(phoneNumber: string, result: ScreeningResult) {
   await db.insert(callLogs).values({
     phoneNumber,
     action: result.action,
-    metadata: { 
+    metadata: {
       reason: result.reason,
       risk: result.risk,
-      features: result.features
+      features: result.features,
+      dncStatus: result.dncStatus
     }
   });
 }

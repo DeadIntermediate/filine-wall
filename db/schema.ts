@@ -8,6 +8,7 @@ export const phoneNumbers = pgTable("phone_numbers", {
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   active: boolean("active").default(true),
+  dncStatus: jsonb("dnc_status"), // Store DNC registry information
 });
 
 export const callLogs = pgTable("call_logs", {
