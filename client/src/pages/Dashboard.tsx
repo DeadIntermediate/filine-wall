@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Statistics } from "@/components/Statistics";
+import { HeatmapView } from "@/components/HeatmapView";
 import { useQuery } from "@tanstack/react-query";
 
 export default function Dashboard() {
@@ -10,7 +11,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Dashboard</h1>
-      
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader>
@@ -39,6 +40,8 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <HeatmapView />
 
       <Card>
         <CardHeader>

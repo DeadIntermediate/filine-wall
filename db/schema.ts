@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, jsonb, decimal } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 
 export const phoneNumbers = pgTable("phone_numbers", {
@@ -17,6 +17,8 @@ export const callLogs = pgTable("call_logs", {
   action: text("action").notNull(), // blocked, allowed
   duration: text("duration"),
   metadata: jsonb("metadata"),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
 });
 
 // Schemas for validation

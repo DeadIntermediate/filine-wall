@@ -133,6 +133,33 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // New heatmap endpoint
+  app.get("/api/calls/heatmap", async (req, res) => {
+    const timeRange = parseInt(req.query.range as string) || 24; // Default to last 24 hours
+    const startTime = new Date();
+    startTime.setHours(startTime.getHours() - timeRange);
+
+    const heatmapData = await db
+      .select({
+        latitude: callLogs.latitude,
+        longitude: callLogs.longitude,
+        count: sql<number>`count(*)`,
+      })
+      .from(callLogs)
+      .where(sql`${callLogs.timestamp} >= ${startTime}`)
+      .groupBy(callLogs.latitude, callLogs.longitude)
+      .having(sql`${callLogs.latitude} is not null and ${callLogs.longitude} is not null`);
+
+    // Transform into heatmap format
+    const locations = heatmapData.map(point => ({
+      lat: Number(point.latitude),
+      long: Number(point.longitude),
+      intensity: Math.min(100, (point.count / Math.max(...heatmapData.map(p => p.count))) * 100)
+    }));
+
+    res.json(locations);
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
