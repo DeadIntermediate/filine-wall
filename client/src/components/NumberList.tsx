@@ -7,6 +7,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge"; // Added import
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -50,7 +51,13 @@ export function NumberList() {
         {numbers?.map((number: any) => (
           <TableRow key={number.id}>
             <TableCell>{number.number}</TableCell>
-            <TableCell>{number.type}</TableCell>
+            <TableCell>
+              <Badge
+                variant={number.type === "blacklist" ? "destructive" : "success"}
+              >
+                {number.type === "blacklist" ? "Blocked" : "Allowed"}
+              </Badge>
+            </TableCell>
             <TableCell>
               {new Date(number.createdAt).toLocaleDateString()}
             </TableCell>
