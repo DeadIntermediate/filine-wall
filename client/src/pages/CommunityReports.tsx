@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NumberList } from "@/components/NumberList";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -8,40 +8,59 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, ThumbsUp } from "lucide-react";
+import { SpamReportList } from "@/components/SpamReportList";
 
-export default function NumberManagement() {
+const SPAM_CATEGORIES = [
+  { value: "telemarketing", label: "Telemarketing" },
+  { value: "scam", label: "Scam Call" },
+  { value: "robocall", label: "Robocall" },
+  { value: "harassment", label: "Harassment" },
+  { value: "other", label: "Other" },
+];
+
+export default function CommunityReports() {
   const [open, setOpen] = useState(false);
   const [number, setNumber] = useState("");
-  const [listType, setListType] = useState("blacklist");
+  const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const addNumber = useMutation({
-    mutationFn: async (data: { number: string; type: string; description: string }) => {
-      const res = await fetch("/api/numbers", {
+  const submitReport = useMutation({
+    mutationFn: async (data: { 
+      phoneNumber: string; 
+      category: string;
+      description: string;
+    }) => {
+      const res = await fetch("/api/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to add number");
+      if (!res.ok) throw new Error("Failed to submit report");
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/numbers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
       setOpen(false);
       setNumber("");
+      setCategory("");
       setDescription("");
       toast({
-        title: "Number added successfully",
-        description: `The number has been added to the ${listType}.`,
+        title: "Report submitted",
+        description: "Thank you for helping the community!",
       });
     },
   });
@@ -49,23 +68,23 @@ export default function NumberManagement() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Number Management</h1>
+        <h1 className="text-3xl font-bold">Community Reports</h1>
 
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Add Number
+              Report Number
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add New Number</DialogTitle>
+              <DialogTitle>Report Spam Number</DialogTitle>
             </DialogHeader>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                addNumber.mutate({ number, type: listType, description });
+                submitReport.mutate({ phoneNumber: number, category, description });
               }}
               className="space-y-4"
             >
@@ -81,48 +100,42 @@ export default function NumberManagement() {
               </div>
 
               <div className="space-y-2">
-                <Label>List Type</Label>
-                <RadioGroup
-                  value={listType}
-                  onValueChange={setListType}
-                  className="flex flex-col space-y-1"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="blacklist" id="blacklist" />
-                    <Label htmlFor="blacklist">Block List</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="whitelist" id="whitelist" />
-                    <Label htmlFor="whitelist">Allow List</Label>
-                  </div>
-                </RadioGroup>
+                <Label htmlFor="category">Category</Label>
+                <Select value={category} onValueChange={setCategory} required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SPAM_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Reason</Label>
+                <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder={
-                    listType === "blacklist"
-                      ? "Why are you blocking this number?"
-                      : "Why are you allowing this number?"
-                  }
+                  placeholder="Provide details about the spam call..."
                   className="h-24"
                   required
                 />
               </div>
 
               <Button type="submit" className="w-full">
-                Add to {listType === "blacklist" ? "Block" : "Allow"} List
+                Submit Report
               </Button>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      <NumberList />
+      <SpamReportList />
     </div>
   );
 }

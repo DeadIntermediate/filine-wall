@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
 import { desc, eq, sql } from "drizzle-orm";
-import { phoneNumbers, callLogs } from "@db/schema";
+import { phoneNumbers, callLogs, spamReports } from "@db/schema";
 import { screenCall, logCall } from "./services/callScreening";
 
 export function registerRoutes(app: Express): Server {
@@ -158,6 +158,84 @@ export function registerRoutes(app: Express): Server {
     }));
 
     res.json(locations);
+  });
+
+
+  // Get all spam reports
+  app.get("/api/reports", async (req, res) => {
+    const reports = await db.query.spamReports.findMany({
+      orderBy: [
+        { confirmations: "desc" },
+        { reportedAt: "desc" }
+      ],
+    });
+    res.json(reports);
+  });
+
+  // Submit new spam report
+  app.post("/api/reports", async (req, res) => {
+    const { phoneNumber, category, description } = req.body;
+
+    // Check if report already exists
+    const existingReport = await db.query.spamReports.findFirst({
+      where: eq(spamReports.phoneNumber, phoneNumber),
+    });
+
+    if (existingReport) {
+      // Update existing report with new confirmation
+      const [updated] = await db
+        .update(spamReports)
+        .set({
+          confirmations: sql`${spamReports.confirmations} + 1`,
+          status: existingReport.confirmations >= 2 ? "verified" : "pending",
+        })
+        .where(eq(spamReports.id, existingReport.id))
+        .returning();
+
+      res.json(updated);
+    } else {
+      // Create new report
+      const [report] = await db
+        .insert(spamReports)
+        .values({
+          phoneNumber,
+          category,
+          description,
+          status: "pending",
+          metadata: { originalReport: { category, description } },
+        })
+        .returning();
+
+      res.json(report);
+    }
+  });
+
+  // Confirm existing report
+  app.post("/api/reports/:id/confirm", async (req, res) => {
+    const { id } = req.params;
+
+    const [updated] = await db
+      .update(spamReports)
+      .set({
+        confirmations: sql`${spamReports.confirmations} + 1`,
+        status: sql`CASE 
+          WHEN ${spamReports.confirmations} + 1 >= 3 THEN 'verified'
+          ELSE ${spamReports.status}
+        END`,
+      })
+      .where(eq(spamReports.id, parseInt(id)))
+      .returning();
+
+    // If report is verified, automatically add to blacklist
+    if (updated.status === "verified") {
+      await db.insert(phoneNumbers).values({
+        number: updated.phoneNumber,
+        type: "blacklist",
+        description: `Automatically blocked based on community reports. Category: ${updated.category}`,
+      });
+    }
+
+    res.json(updated);
   });
 
   const httpServer = createServer(app);

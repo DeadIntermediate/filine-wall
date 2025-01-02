@@ -7,9 +7,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge"; // Added import
+import { Badge } from "@/components/ui/badge";
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { Trash2, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export function NumberList() {
@@ -43,6 +49,7 @@ export function NumberList() {
         <TableRow>
           <TableHead>Number</TableHead>
           <TableHead>Type</TableHead>
+          <TableHead>Reason</TableHead>
           <TableHead>Added On</TableHead>
           <TableHead>Actions</TableHead>
         </TableRow>
@@ -53,10 +60,31 @@ export function NumberList() {
             <TableCell>{number.number}</TableCell>
             <TableCell>
               <Badge
-                variant={number.type === "blacklist" ? "destructive" : "success"}
+                variant={number.type === "blacklist" ? "destructive" : "secondary"}
               >
                 {number.type === "blacklist" ? "Blocked" : "Allowed"}
               </Badge>
+            </TableCell>
+            <TableCell>
+              {number.description ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger className="flex items-center gap-1">
+                      <span className="truncate max-w-[200px]">
+                        {number.description}
+                      </span>
+                      <Info className="h-4 w-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-xs whitespace-normal">
+                        {number.description}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <span className="text-muted-foreground">No reason provided</span>
+              )}
             </TableCell>
             <TableCell>
               {new Date(number.createdAt).toLocaleDateString()}
