@@ -2,11 +2,13 @@ import { db } from "@db";
 import { eq } from "drizzle-orm";
 import { phoneNumbers, callLogs } from "@db/schema";
 import { verifyPhoneNumber } from "./phoneVerification";
+import { predictSpam } from "./spamPrediction";
 
 interface ScreeningResult {
   action: "blocked" | "allowed";
   reason: string;
   risk: number;
+  features?: string[];
 }
 
 export async function screenCall(phoneNumber: string): Promise<ScreeningResult> {
@@ -34,18 +36,34 @@ export async function screenCall(phoneNumber: string): Promise<ScreeningResult> 
     };
   }
 
-  if (verification.type === "suspicious" && verification.risk > 0.7) {
+  // Get ML prediction
+  const prediction = await predictSpam(phoneNumber);
+
+  // High spam probability (>0.7) and good confidence (>0.5)
+  if (prediction.spamProbability > 0.7 && prediction.confidence > 0.5) {
     return {
       action: "blocked",
-      reason: "High risk number detected",
-      risk: verification.risk
+      reason: "High spam probability detected",
+      risk: prediction.spamProbability,
+      features: prediction.features
+    };
+  }
+
+  // Suspicious number with some evidence
+  if (verification.type === "suspicious" && prediction.spamProbability > 0.4) {
+    return {
+      action: "blocked",
+      reason: "Multiple risk factors detected",
+      risk: Math.max(verification.risk, prediction.spamProbability),
+      features: prediction.features
     };
   }
 
   return {
     action: "allowed",
     reason: "Number passed screening",
-    risk: verification.risk
+    risk: prediction.spamProbability,
+    features: prediction.features
   };
 }
 
@@ -53,6 +71,10 @@ export async function logCall(phoneNumber: string, result: ScreeningResult) {
   await db.insert(callLogs).values({
     phoneNumber,
     action: result.action,
-    metadata: { reason: result.reason, risk: result.risk }
+    metadata: { 
+      reason: result.reason,
+      risk: result.risk,
+      features: result.features
+    }
   });
 }
