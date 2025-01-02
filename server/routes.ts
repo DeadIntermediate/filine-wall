@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { db } from "@db";
 import { desc, eq, sql } from "drizzle-orm";
 import { phoneNumbers, callLogs } from "@db/schema";
+import { screenCall, logCall } from "./services/callScreening";
 
 export function registerRoutes(app: Express): Server {
   // Get all phone numbers
@@ -69,18 +70,40 @@ export function registerRoutes(app: Express): Server {
   // Get daily statistics
   app.get("/api/stats/daily", async (req, res) => {
     const days = 7;
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
     const stats = await db
       .select({
-        date: sql<string>`date_trunc('day', ${callLogs.timestamp})`,
+        date: sql<string>`DATE(${callLogs.timestamp})`,
         blocked: sql<number>`count(*) filter (where ${callLogs.action} = 'blocked')`,
         allowed: sql<number>`count(*) filter (where ${callLogs.action} = 'allowed')`,
       })
       .from(callLogs)
-      .where(sql`${callLogs.timestamp} >= now() - interval '${days} days'`)
-      .groupBy(sql`date_trunc('day', ${callLogs.timestamp})`)
-      .orderBy(sql`date_trunc('day', ${callLogs.timestamp})`);
+      .where(sql`${callLogs.timestamp} >= ${startDate} AND ${callLogs.timestamp} <= ${endDate}`)
+      .groupBy(sql`DATE(${callLogs.timestamp})`)
+      .orderBy(sql`DATE(${callLogs.timestamp})`);
 
     res.json({ daily: stats });
+  });
+
+  // New route for call screening
+  app.post("/api/screen", async (req, res) => {
+    const { phoneNumber } = req.body;
+
+    if (!phoneNumber) {
+      return res.status(400).json({ message: "Phone number is required" });
+    }
+
+    try {
+      const result = await screenCall(phoneNumber);
+      await logCall(phoneNumber, result);
+      res.json(result);
+    } catch (error) {
+      console.error("Error screening call:", error);
+      res.status(500).json({ message: "Error screening call" });
+    }
   });
 
   const httpServer = createServer(app);
