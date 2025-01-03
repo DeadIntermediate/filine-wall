@@ -6,19 +6,57 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Info } from "lucide-react";
+import { Info, Flag } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 
 export function CallTable() {
-  const { data: calls } = useQuery({
+  const { toast } = useToast();
+  const { data: calls = [] } = useQuery({
     queryKey: ["/api/calls"],
+  });
+
+  const reportSpam = useMutation({
+    mutationFn: async (phoneNumber: string) => {
+      const res = await fetch("/api/spam-reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          phoneNumber,
+          category: "user_reported",
+          description: "Reported via call history"
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to report spam");
+      }
+
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
+      toast({
+        title: "Number reported",
+        description: "Thank you for helping protect the community.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to report number. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   return (
@@ -30,10 +68,11 @@ export function CallTable() {
           <TableHead>Action</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Duration</TableHead>
+          <TableHead className="text-right">Report</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {calls?.map((call: any) => (
+        {calls.map((call: any) => (
           <TableRow key={call.id}>
             <TableCell>{call.phoneNumber}</TableCell>
             <TableCell>
@@ -66,6 +105,18 @@ export function CallTable() {
               )}
             </TableCell>
             <TableCell>{call.duration || "N/A"}</TableCell>
+            <TableCell className="text-right">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => reportSpam.mutate(call.phoneNumber)}
+                disabled={reportSpam.isPending || call.metadata?.isReported}
+                className="flex items-center gap-2"
+              >
+                <Flag className="h-4 w-4" />
+                {call.metadata?.isReported ? "Reported" : "Report Spam"}
+              </Button>
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>

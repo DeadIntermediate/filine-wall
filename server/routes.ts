@@ -169,6 +169,73 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Submit new spam report from call history
+  app.post("/api/spam-reports", async (req, res) => {
+    const { phoneNumber, category, description } = req.body;
+
+    try {
+      // Check if report already exists
+      const existingReport = await db.query.spamReports.findFirst({
+        where: eq(spamReports.phoneNumber, phoneNumber),
+      });
+
+      if (existingReport) {
+        // Update existing report with new confirmation
+        const [updated] = await db
+          .update(spamReports)
+          .set({
+            confirmations: sql`${spamReports.confirmations} + 1`,
+            status: existingReport.confirmations >= 2 ? "verified" : "pending",
+          })
+          .where(eq(spamReports.id, existingReport.id))
+          .returning();
+
+        // Update call logs to mark this number as reported
+        await db
+          .update(callLogs)
+          .set({
+            metadata: sql`jsonb_set(
+              COALESCE(${callLogs.metadata}, '{}'::jsonb),
+              '{isReported}',
+              'true'::jsonb
+            )`
+          })
+          .where(eq(callLogs.phoneNumber, phoneNumber));
+
+        res.json(updated);
+      } else {
+        // Create new report
+        const [report] = await db
+          .insert(spamReports)
+          .values({
+            phoneNumber,
+            category,
+            description,
+            status: "pending",
+            metadata: { originalReport: { category, description } },
+          })
+          .returning();
+
+        // Update call logs to mark this number as reported
+        await db
+          .update(callLogs)
+          .set({
+            metadata: sql`jsonb_set(
+              COALESCE(${callLogs.metadata}, '{}'::jsonb),
+              '{isReported}',
+              'true'::jsonb
+            )`
+          })
+          .where(eq(callLogs.phoneNumber, phoneNumber));
+
+        res.json(report);
+      }
+    } catch (error) {
+      console.error("Error creating spam report:", error);
+      res.status(500).json({ message: "Failed to create spam report" });
+    }
+  });
+
   // Confirm existing report
   app.post("/api/reports/:id/confirm", async (req, res) => {
     const { id } = req.params;

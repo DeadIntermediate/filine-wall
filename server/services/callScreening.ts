@@ -6,6 +6,7 @@ import { predictSpam } from "./spamPrediction";
 import { dncRegistry } from "./dncRegistry";
 import { generateVerificationCode } from "./callerVerification";
 import { analyzeVoiceStream } from "./voiceAnalysis";
+import { lookupCarrier } from "./carrierLookup";
 
 interface ScreeningResult {
   action: "blocked" | "allowed" | "challenge";
@@ -31,6 +32,17 @@ interface ScreeningResult {
     expiresAt?: Date;
     message?: string;
   };
+  metadata?: {
+    callerName?: string;
+    callerType?: string;
+    callerPresentation?: string;
+    callerVerified?: boolean;
+    carrierName?: string;
+    carrierType?: string;
+    carrierCountry?: string;
+    isMobile?: boolean;
+    lineType?: string;
+  };
 }
 
 export async function screenCall(
@@ -38,6 +50,9 @@ export async function screenCall(
   audioData?: number[],
   sampleRate?: number
 ): Promise<ScreeningResult> {
+  // Get carrier information
+  const carrierInfo = await lookupCarrier(phoneNumber);
+
   // Check if number is whitelisted
   const whitelisted = await db.query.phoneNumbers.findFirst({
     where: eq(phoneNumbers.number, phoneNumber),
@@ -47,7 +62,12 @@ export async function screenCall(
     return {
       action: "allowed",
       reason: "Number is whitelisted",
-      risk: 0
+      risk: 0,
+      metadata: {
+        lineType: carrierInfo.lineType,
+        carrierName: carrierInfo.carrier,
+        carrierType: carrierInfo.lineType,
+      }
     };
   }
 
@@ -62,6 +82,11 @@ export async function screenCall(
         code: verificationResult.code,
         expiresAt: verificationResult.expiresAt,
         message: "If you are a legitimate caller, please verify your identity"
+      },
+      metadata: {
+        lineType: carrierInfo.lineType,
+        carrierName: carrierInfo.carrier,
+        carrierType: carrierInfo.lineType,
       }
     };
   }
@@ -81,6 +106,11 @@ export async function screenCall(
           code: verificationResult.code,
           expiresAt: verificationResult.expiresAt,
           message: "If this is a legitimate call, please verify your identity"
+        },
+        metadata: {
+          lineType: carrierInfo.lineType,
+          carrierName: carrierInfo.carrier,
+          carrierType: carrierInfo.lineType,
         }
       };
     }
@@ -103,6 +133,11 @@ export async function screenCall(
           code: verificationResult.code,
           expiresAt: verificationResult.expiresAt,
           message: "If you are a legitimate caller, please verify your identity"
+        },
+        metadata: {
+          lineType: carrierInfo.lineType,
+          carrierName: carrierInfo.carrier,
+          carrierType: carrierInfo.lineType,
         }
       };
     }
@@ -117,7 +152,12 @@ export async function screenCall(
     return {
       action: "blocked",
       reason: "Invalid phone number format",
-      risk: 1
+      risk: 1,
+      metadata: {
+        lineType: carrierInfo.lineType,
+        carrierName: carrierInfo.carrier,
+        carrierType: carrierInfo.lineType,
+      }
     };
   }
 
@@ -142,6 +182,11 @@ export async function screenCall(
         code: verificationResult.code,
         expiresAt: verificationResult.expiresAt,
         message: "If you are a legitimate caller, please verify your identity"
+      },
+      metadata: {
+        lineType: carrierInfo.lineType,
+        carrierName: carrierInfo.carrier,
+        carrierType: carrierInfo.lineType,
       }
     };
   }
@@ -164,6 +209,11 @@ export async function screenCall(
         code: verificationResult.code,
         expiresAt: verificationResult.expiresAt,
         message: "Please complete voice verification challenge"
+      },
+      metadata: {
+        lineType: carrierInfo.lineType,
+        carrierName: carrierInfo.carrier,
+        carrierType: carrierInfo.lineType,
       }
     };
   }
@@ -178,16 +228,21 @@ export async function screenCall(
       confidence: prediction.confidence,
       factors: prediction.features
     },
-    voiceAnalysis
+    voiceAnalysis,
+    metadata: {
+      lineType: carrierInfo.lineType,
+      carrierName: carrierInfo.carrier,
+      carrierType: carrierInfo.lineType,
+    }
   };
 }
 
 export async function logCall(phoneNumber: string, result: ScreeningResult) {
   const callerIdInfo = {
-    name: result.metadata?.callerName || "Unknown",
-    type: result.metadata?.callerType || "Unknown",
-    presentation: result.metadata?.callerPresentation || "allowed",
-    verified: result.metadata?.callerVerified || false,
+    name: "Unknown",
+    type: "Unknown",
+    presentation: "allowed",
+    verified: false,
     timestamp: new Date().toISOString()
   };
 
@@ -212,7 +267,12 @@ export async function logCall(phoneNumber: string, result: ScreeningResult) {
         provided: true,
         expiresAt: result.verification.expiresAt
       } : undefined,
-      lineType: result.metadata?.lineType || "unknown"
+      lineType: result.metadata?.lineType || "unknown",
+      carrierName: result.metadata?.carrierName,
+      carrierType: result.metadata?.carrierType,
+      carrierCountry: result.metadata?.carrierCountry,
+      isMobile: result.metadata?.isMobile,
+
     },
     callerId: callerIdInfo,
     carrierInfo,
