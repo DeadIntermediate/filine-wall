@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
 import { desc, eq, sql } from "drizzle-orm";
-import { phoneNumbers, callLogs, spamReports } from "@db/schema";
+import { phoneNumbers, callLogs, spamReports, featureSettings } from "@db/schema";
 import { screenCall, logCall } from "./services/callScreening";
 import { calculateReputationScore } from "./services/reputationScoring";
 import { verifyCode, getVerificationAttempts } from "./services/callerVerification";
@@ -324,6 +324,47 @@ export function registerRoutes(app: Express): Server {
       }
     });
   });
+
+  // Get feature settings
+  app.get("/api/settings", async (req, res) => {
+    const settings = await db.query.featureSettings.findMany();
+
+    // Transform into a key-value object
+    const settingsMap = settings.reduce((acc, setting) => ({
+      ...acc,
+      [setting.featureKey]: {
+        isEnabled: setting.isEnabled,
+        configuration: setting.configuration
+      }
+    }), {});
+
+    res.json(settingsMap);
+  });
+
+  // Update feature setting
+  app.post("/api/settings", async (req, res) => {
+    const { key, enabled, configuration } = req.body;
+
+    const [setting] = await db
+      .insert(featureSettings)
+      .values({
+        featureKey: key,
+        isEnabled: enabled,
+        configuration,
+      })
+      .onConflictDoUpdate({
+        target: featureSettings.featureKey,
+        set: {
+          isEnabled: enabled,
+          configuration,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    res.json(setting);
+  });
+
 
   const httpServer = createServer(app);
   return httpServer;

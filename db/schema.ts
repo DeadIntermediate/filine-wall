@@ -90,6 +90,14 @@ export const voicePatterns = pgTable("voice_patterns", {
   active: boolean("active").default(true),
 });
 
+export const featureSettings = pgTable("feature_settings", {
+  id: serial("id").primaryKey(),
+  featureKey: text("feature_key").notNull().unique(),
+  isEnabled: boolean("is_enabled").default(true),
+  configuration: jsonb("configuration"), // Store feature-specific settings
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const insertPhoneNumberSchema = createInsertSchema(phoneNumbers);
 export const selectPhoneNumberSchema = createSelectSchema(phoneNumbers);
 export const insertCallLogSchema = createInsertSchema(callLogs);
@@ -104,6 +112,8 @@ export const insertCallPatternSchema = createInsertSchema(callPatterns);
 export const selectCallPatternSchema = createSelectSchema(callPatterns);
 export const insertGeoRuleSchema = createInsertSchema(geoRules);
 export const selectGeoRuleSchema = createSelectSchema(geoRules);
+export const insertFeatureSettingSchema = createInsertSchema(featureSettings);
+export const selectFeatureSettingSchema = createSelectSchema(featureSettings);
 
 export type PhoneNumber = typeof phoneNumbers.$inferSelect;
 export type InsertPhoneNumber = typeof phoneNumbers.$inferInsert;
@@ -119,3 +129,5 @@ export type CallPattern = typeof callPatterns.$inferSelect;
 export type InsertCallPattern = typeof callPatterns.$inferInsert;
 export type GeoRule = typeof geoRules.$inferSelect;
 export type InsertGeoRule = typeof geoRules.$inferInsert;
+export type FeatureSetting = typeof featureSettings.$inferSelect;
+export type InsertFeatureSetting = typeof featureSettings.$inferInsert;
