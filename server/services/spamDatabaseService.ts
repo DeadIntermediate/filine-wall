@@ -3,6 +3,18 @@ import { phoneNumbers } from "@db/schema";
 import { eq } from "drizzle-orm";
 import fetch from "node-fetch";
 
+/**
+ * Service for managing spam number database.
+ * Currently uses FCC's public Consumer Complaint Database.
+ * 
+ * Future API Integration Options:
+ * - Truecaller API: Global spam number database
+ * - Robokiller API: Specialized in robocall detection
+ * - Hiya Fraud/Spam API: Real-time number reputation
+ * - YouMail API: Robocall and spam detection
+ * - Twilio Lookup API: Spam likelihood scoring
+ */
+
 interface FCCSpamRecord {
   phoneNumber: string;
   reportCount: number;
