@@ -24,6 +24,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { Laptop, Smartphone, Server, Activity, Clock, Signal, Wifi } from "lucide-react";
+import { DeviceDiagnosticTool } from "@/components/DeviceDiagnosticTool";
 
 const deviceSchema = z.object({
   name: z.string().min(1, "Device name is required"),
@@ -280,6 +281,9 @@ export function DeviceConfigPanel() {
                             : "Never"}
                         </span>
                       </div>
+                    </div>
+                    <div className="pt-4 border-t">
+                      <DeviceDiagnosticTool deviceId={device.deviceId} />
                     </div>
                   </div>
                 </CardContent>

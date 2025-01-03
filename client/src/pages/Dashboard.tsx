@@ -8,6 +8,7 @@ import { CallTrendAnalytics } from "@/components/CallTrendAnalytics";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Shield, ChartBar, Cog } from "lucide-react";
+import { DashboardCustomizer } from "@/components/DashboardCustomizer";
 
 export default function Dashboard() {
   const { data: stats } = useQuery({
@@ -18,6 +19,12 @@ export default function Dashboard() {
     queryKey: ["/api/risk-score"],
     refetchInterval: 5000, // Refresh every 5 seconds
   });
+
+  const { data: settings } = useQuery({
+    queryKey: ["/api/settings"],
+  });
+
+  const isFeatureEnabled = (key: string) => settings?.[key]?.isEnabled ?? true;
 
   return (
     <div className="space-y-6">
@@ -90,43 +97,47 @@ export default function Dashboard() {
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
               className="space-y-6"
             >
-              <div className="grid gap-4 md:grid-cols-4">
-                {[
-                  { title: "Total Blocked", value: stats?.totalBlocked || 0 },
-                  { title: "Blacklisted Numbers", value: stats?.blacklistedCount || 0 },
-                  { title: "Today's Blocks", value: stats?.todayBlocks || 0 },
-                  { component: <RiskScoreGauge score={riskScore?.currentRisk || 0} label="Current Risk Level" /> }
-                ].map((item, index) => (
-                  <motion.div
-                    key={item.title || 'risk-gauge'}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                  >
-                    {item.component ? (
-                      item.component
-                    ) : (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>{item.title}</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <p className="text-3xl font-bold">{item.value}</p>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </motion.div>
-                ))}
-              </div>
+              {isFeatureEnabled('show_statistics') && (
+                <div className="grid gap-4 md:grid-cols-4">
+                  {[
+                    { title: "Total Blocked", value: stats?.totalBlocked || 0 },
+                    { title: "Blacklisted Numbers", value: stats?.blacklistedCount || 0 },
+                    { title: "Today's Blocks", value: stats?.todayBlocks || 0 },
+                    { component: <RiskScoreGauge score={riskScore?.currentRisk || 0} label="Current Risk Level" /> }
+                  ].map((item, index) => (
+                    <motion.div
+                      key={item.title || 'risk-gauge'}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      {item.component ? (
+                        item.component
+                      ) : (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>{item.title}</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-3xl font-bold">{item.value}</p>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              )}
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Call Trends</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CallTrendAnalytics />
-                </CardContent>
-              </Card>
+              {isFeatureEnabled('show_call_trends') && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Recent Call Trends</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CallTrendAnalytics />
+                  </CardContent>
+                </Card>
+              )}
             </motion.div>
           </TabsContent>
 
@@ -139,22 +150,26 @@ export default function Dashboard() {
               className="space-y-6"
             >
               <div className="grid gap-6 md:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Geographic Distribution</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <HeatmapView />
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Call Statistics</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Statistics />
-                  </CardContent>
-                </Card>
+                {isFeatureEnabled('show_heatmap') && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Geographic Distribution</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <HeatmapView />
+                    </CardContent>
+                  </Card>
+                )}
+                {isFeatureEnabled('show_call_stats') && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Call Statistics</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Statistics />
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </motion.div>
           </TabsContent>
@@ -166,7 +181,7 @@ export default function Dashboard() {
               exit={{ opacity: 0, y: -20 }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
             >
-              <SettingsPanel />
+              <DashboardCustomizer />
             </motion.div>
           </TabsContent>
         </AnimatePresence>

@@ -96,6 +96,8 @@ export const featureSettings = pgTable("feature_settings", {
   featureKey: text("feature_key").notNull().unique(),
   isEnabled: boolean("is_enabled").default(true),
   configuration: jsonb("configuration"), // Store feature-specific settings
+  displayOrder: integer("display_order"), // For ordering dashboard components
+  category: text("category"), // For grouping features (e.g., 'dashboard', 'security')
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
