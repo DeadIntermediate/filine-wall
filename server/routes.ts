@@ -542,6 +542,68 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // GitHub Repository Setup
+  app.post("/api/github/create-repo", async (req, res) => {
+    const { repoName, description, token } = req.body;
+
+    try {
+      // Create repository using GitHub API
+      const createRepoResponse = await fetch("https://api.github.com/user/repos", {
+        method: "POST",
+        headers: {
+          "Accept": "application/vnd.github.v3+json",
+          "Authorization": `token ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: repoName,
+          description: description || "",
+          private: true,
+          auto_init: true,
+        }),
+      });
+
+      if (!createRepoResponse.ok) {
+        const error = await createRepoResponse.json();
+        throw new Error(error.message || "Failed to create repository");
+      }
+
+      const repo = await createRepoResponse.json();
+
+      // Initialize repository with project files
+      const initResponse = await fetch(
+        `https://api.github.com/repos/${repo.full_name}/contents`,
+        {
+          method: "PUT",
+          headers: {
+            "Accept": "application/vnd.github.v3+json",
+            "Authorization": `token ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message: "Initial commit: Project setup",
+            content: Buffer.from("# ScamShield\n\nAnti-telemarketing system with advanced call screening").toString("base64"),
+            branch: "main",
+          }),
+        }
+      );
+
+      if (!initResponse.ok) {
+        throw new Error("Failed to initialize repository");
+      }
+
+      res.json({
+        success: true,
+        repository: repo.html_url,
+      });
+    } catch (error) {
+      console.error("GitHub API Error:", error);
+      res.status(500).json({
+        message: error.message || "Failed to set up repository",
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
