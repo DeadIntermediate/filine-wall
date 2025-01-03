@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { voicePatternLearner } from "./voicePatternLearning";
 
 interface VoiceAnalysisResult {
   isRobot: boolean;
@@ -16,6 +17,20 @@ interface VoiceAnalysisResult {
       knownPhrases?: boolean;
       dialectMatch?: boolean;
     };
+    mfcc?: number[];
+    spectralCentroid?: number;
+    spectralRolloff?: number;
+    spectralBandwidth?: number;
+    zeroCrossings?: number;
+    energy?: number;
+    pitchVariance?: number;
+    tempo?: number;
+    beatStrength?: number;
+    learned?: {
+      matchedType: string;
+      confidence: number;
+    };
+
   };
 }
 
@@ -69,6 +84,7 @@ def analyze_voice_stream(audio_data, sample_rate):
     # 4. Spectral features
     spec_cent = librosa.feature.spectral_centroid(y=y, sr=sample_rate)
     spec_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sample_rate)
+    spec_bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sample_rate)
 
     # 5. Speech-to-text for language detection
     try:
@@ -106,7 +122,15 @@ def analyze_voice_stream(audio_data, sample_rate):
             'repetition': float(repetition_score),
             'naturalness': float(naturalness),
             'pitch': float(pitch_mean) if not np.isnan(pitch_mean) else 0.0,
-            'languageSpecific': language_patterns
+            'languageSpecific': language_patterns,
+            'mfcc': mfccs.tolist(),
+            'spectralCentroid': np.mean(spec_cent).tolist(),
+            'spectralRolloff': np.mean(spec_rolloff).tolist(),
+            'spectralBandwidth': np.mean(spec_bandwidth).tolist(),
+            'zeroCrossings': speech_rate,
+            'energy': np.mean(librosa.feature.rms(y=y, frame_length=2048, hop_length=512)).tolist(),
+            'pitchVariance': np.var(pitches[magnitudes > np.max(magnitudes)/2]).tolist()
+
         }
     }
 
@@ -193,12 +217,60 @@ export async function analyzeVoiceStream(audioData: number[], sampleRate: number
     }
 
     const analysis = JSON.parse(result);
+
+    // Extract features for pattern learning
+    const features = {
+      mfcc: analysis.patterns.mfcc || [],
+      spectral: {
+        centroid: analysis.patterns.spectralCentroid || 0,
+        rolloff: analysis.patterns.spectralRolloff || 0,
+        bandwidth: analysis.patterns.spectralBandwidth || 0
+      },
+      temporal: {
+        zeroCrossings: analysis.patterns.zeroCrossings || 0,
+        energy: analysis.patterns.energy || 0
+      },
+      pitch: {
+        mean: analysis.patterns.pitch || 0,
+        variance: analysis.patterns.pitchVariance || 0
+      },
+      rhythm: {
+        tempo: analysis.patterns.tempo || 0,
+        beatStrength: analysis.patterns.beatStrength || 0
+      }
+    };
+
+    // Match against learned patterns
+    const patternMatch = await voicePatternLearner.matchPattern(
+      features,
+      analysis.language?.detected
+    );
+
+    // Learn from this pattern if confidence is high
+    if (analysis.confidence > 0.8) {
+      await voicePatternLearner.learnFromPattern(
+        features,
+        analysis.is_robot ? 'robot' : 'legitimate',
+        analysis.language?.detected
+      );
+    }
+
+    // Combine ML analysis with learned patterns
+    const isRobot = analysis.is_robot || (patternMatch.type === 'robot' && patternMatch.confidence > 0.7);
+    const confidence = Math.max(analysis.confidence, patternMatch.confidence);
+
     return {
-      isRobot: analysis.is_robot,
-      confidence: analysis.confidence,
+      isRobot,
+      confidence,
       features: generateFeatureDescriptions(analysis.patterns, analysis.language),
       language: analysis.language,
-      patterns: analysis.patterns
+      patterns: {
+        ...analysis.patterns,
+        learned: {
+          matchedType: patternMatch.type,
+          confidence: patternMatch.confidence
+        }
+      }
     };
   } catch (error) {
     console.error('Voice analysis failed:', error);

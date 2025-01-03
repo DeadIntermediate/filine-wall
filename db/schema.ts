@@ -47,7 +47,18 @@ export const verificationCodes = pgTable("verification_codes", {
   metadata: jsonb("metadata"), // Store additional verification details
 });
 
-// Schemas for validation
+export const voicePatterns = pgTable("voice_patterns", {
+  id: serial("id").primaryKey(),
+  patternType: text("pattern_type").notNull(), // 'robot', 'spam', 'legitimate'
+  features: jsonb("features").notNull(), // Store normalized feature vectors
+  confidence: decimal("confidence", { precision: 5, scale: 2 }).notNull(),
+  language: text("language"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  metadata: jsonb("metadata"), // Additional pattern information
+  active: boolean("active").default(true),
+});
+
 export const insertPhoneNumberSchema = createInsertSchema(phoneNumbers);
 export const selectPhoneNumberSchema = createSelectSchema(phoneNumbers);
 export const insertCallLogSchema = createInsertSchema(callLogs);
@@ -56,8 +67,9 @@ export const insertSpamReportSchema = createInsertSchema(spamReports);
 export const selectSpamReportSchema = createSelectSchema(spamReports);
 export const insertVerificationCodeSchema = createInsertSchema(verificationCodes);
 export const selectVerificationCodeSchema = createSelectSchema(verificationCodes);
+export const insertVoicePatternSchema = createInsertSchema(voicePatterns);
+export const selectVoicePatternSchema = createSelectSchema(voicePatterns);
 
-// Types
 export type PhoneNumber = typeof phoneNumbers.$inferSelect;
 export type InsertPhoneNumber = typeof phoneNumbers.$inferInsert;
 export type CallLog = typeof callLogs.$inferSelect;
@@ -66,3 +78,5 @@ export type SpamReport = typeof spamReports.$inferSelect;
 export type InsertSpamReport = typeof spamReports.$inferInsert;
 export type VerificationCode = typeof verificationCodes.$inferSelect;
 export type InsertVerificationCode = typeof verificationCodes.$inferInsert;
+export type VoicePattern = typeof voicePatterns.$inferSelect;
+export type InsertVoicePattern = typeof voicePatterns.$inferInsert;
