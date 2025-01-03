@@ -11,9 +11,10 @@ interface SidebarProps {
     href: string;
     icon: LucideIcon;
   }[];
+  children?: React.ReactNode;
 }
 
-export function Sidebar({ items }: SidebarProps) {
+export function Sidebar({ items, children }: SidebarProps) {
   const { isCollapsed } = useSidebar();
   const [location] = useLocation();
 
@@ -43,8 +44,7 @@ export function Sidebar({ items }: SidebarProps) {
           );
         })}
       </div>
+      {children}
     </div>
   );
 }
-
-//The rest of the original file is removed as it is not needed in this simplified implementation.

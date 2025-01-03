@@ -2,25 +2,30 @@ import { Switch, Route } from "wouter";
 import Dashboard from "@/pages/Dashboard";
 import NumberManagement from "@/pages/NumberManagement";
 import CallHistory from "@/pages/CallHistory";
+import Settings from "@/pages/Settings";
 import VerifyCaller from "@/pages/VerifyCaller";
 import { Layout } from "@/components/Layout";
+import { ThemeProvider } from "@/components/ui/theme-provider";
 
 function App() {
   return (
-    <Switch>
-      <Route path="/verify">
-        <VerifyCaller />
-      </Route>
-      <Route>
-        <Layout>
-          <Switch>
-            <Route path="/" component={Dashboard} />
-            <Route path="/numbers" component={NumberManagement} />
-            <Route path="/history" component={CallHistory} />
-          </Switch>
-        </Layout>
-      </Route>
-    </Switch>
+    <ThemeProvider defaultTheme="system" storageKey="ui-theme">
+      <Switch>
+        <Route path="/verify">
+          <VerifyCaller />
+        </Route>
+        <Route>
+          <Layout>
+            <Switch>
+              <Route path="/" component={Dashboard} />
+              <Route path="/numbers" component={NumberManagement} />
+              <Route path="/history" component={CallHistory} />
+              <Route path="/settings" component={Settings} />
+            </Switch>
+          </Layout>
+        </Route>
+      </Switch>
+    </ThemeProvider>
   );
 }
 
