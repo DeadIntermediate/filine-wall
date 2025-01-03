@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Statistics } from "@/components/Statistics";
 import { HeatmapView } from "@/components/HeatmapView";
+import { RiskScoreGauge } from "@/components/RiskScoreGauge";
 import { useQuery } from "@tanstack/react-query";
 
 export default function Dashboard() {
@@ -8,11 +9,16 @@ export default function Dashboard() {
     queryKey: ["/api/stats"],
   });
 
+  const { data: riskScore } = useQuery({
+    queryKey: ["/api/risk-score"],
+    refetchInterval: 5000, // Refresh every 5 seconds
+  });
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Dashboard</h1>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader>
             <CardTitle>Total Blocked</CardTitle>
@@ -39,6 +45,8 @@ export default function Dashboard() {
             <p className="text-3xl font-bold">{stats?.todayBlocks || 0}</p>
           </CardContent>
         </Card>
+
+        <RiskScoreGauge score={riskScore?.currentRisk || 0} label="Current Risk Level" />
       </div>
 
       <HeatmapView />

@@ -289,6 +289,42 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
+  // Get real-time risk score
+  app.get("/api/risk-score", async (req, res) => {
+    const [recentCalls] = await db
+      .select({
+        total: sql<number>`count(*)`,
+        blocked: sql<number>`count(*) filter (where ${callLogs.action} = 'blocked')`
+      })
+      .from(callLogs)
+      .where(sql`${callLogs.timestamp} >= NOW() - INTERVAL '5 minutes'`);
+
+    // Calculate current risk based on recent call patterns
+    const blockRate = recentCalls.total > 0 ? (recentCalls.blocked / recentCalls.total) * 100 : 0;
+
+    // Get latest high-risk numbers
+    const highRiskNumbers = await db
+      .select({
+        count: sql<number>`count(*)`
+      })
+      .from(phoneNumbers)
+      .where(sql`${phoneNumbers.reputationScore} < 30`);
+
+    // Combine factors for overall risk score
+    const baseRisk = blockRate * 0.6; // 60% weight on recent block rate
+    const reputationImpact = (highRiskNumbers[0].count > 0 ? 20 : 0); // Impact of known high-risk numbers
+
+    const currentRisk = Math.min(100, Math.round(baseRisk + reputationImpact));
+
+    res.json({
+      currentRisk,
+      factors: {
+        recentBlockRate: Math.round(blockRate),
+        highRiskNumbers: highRiskNumbers[0].count,
+      }
+    });
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
