@@ -64,6 +64,15 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
+  // Get all call logs
+  app.get("/api/calls", async (req, res) => {
+    const logs = await db.query.callLogs.findMany({
+      orderBy: desc(callLogs.timestamp),
+      limit: 100,
+    });
+    res.json(logs);
+  });
+
   // Get daily statistics with dynamic date range
   app.get("/api/stats/daily", async (req, res) => {
     const days = parseInt(req.query.days as string) || 7;
