@@ -1,7 +1,7 @@
-import fetch from "node-fetch";
 import { db } from "@db";
 import { phoneNumbers } from "@db/schema";
 import { eq } from "drizzle-orm";
+import fetch from "node-fetch";
 
 interface FCCSpamRecord {
   phoneNumber: string;
@@ -11,7 +11,7 @@ interface FCCSpamRecord {
 }
 
 export class SpamDatabaseService {
-  private static BASE_URL = "https://opendata.fcc.gov/resource/unwanted-calls.json";
+  private static BASE_URL = "https://opendata.fcc.gov/resource/gyhi-xy2s.json";
   private static CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
   private static lastUpdate: Date | null = null;
   private static cache: Map<string, FCCSpamRecord> = new Map();
@@ -23,7 +23,21 @@ export class SpamDatabaseService {
         throw new Error(`Failed to fetch FCC data: ${response.statusText}`);
       }
 
-      const data = await response.json() as FCCSpamRecord[];
+      const rawData = await response.json();
+      if (!Array.isArray(rawData)) {
+        console.error("Unexpected FCC data format:", rawData);
+        return;
+      }
+
+      const data: FCCSpamRecord[] = rawData
+        .filter((record: any) => record && (record.phone_number || record.caller_id_number))
+        .map((record: any) => ({
+          phoneNumber: record.phone_number || record.caller_id_number,
+          reportCount: parseInt(record.complaint_count || "1", 10),
+          lastReported: record.date_received || new Date().toISOString(),
+          category: record.issue || "unknown"
+        }));
+
       this.cache.clear();
 
       // Update cache
@@ -35,7 +49,7 @@ export class SpamDatabaseService {
 
       // Update our database with new spam numbers
       await Promise.all(data.map(async record => {
-        if (record.reportCount > 10) { // Only add frequently reported numbers
+        if (record.reportCount > 5) { // Lower threshold since this is verified FCC data
           try {
             await db.insert(phoneNumbers)
               .values({
