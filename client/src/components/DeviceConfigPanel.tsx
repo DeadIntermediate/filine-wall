@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { Laptop, Smartphone, Server } from "lucide-react";
+import { Laptop, Smartphone, Server, Activity, Clock, Signal, Wifi } from "lucide-react";
 
 const deviceSchema = z.object({
   name: z.string().min(1, "Device name is required"),
@@ -34,6 +34,18 @@ const deviceSchema = z.object({
 
 type DeviceFormData = z.infer<typeof deviceSchema>;
 
+function formatUptime(lastHeartbeat: string | null): string {
+  if (!lastHeartbeat) return "N/A";
+  const last = new Date(lastHeartbeat);
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - last.getTime()) / 1000); // seconds
+
+  if (diff < 60) return `${diff}s`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  return `${Math.floor(diff / 86400)}d`;
+}
+
 export function DeviceConfigPanel() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -41,6 +53,7 @@ export function DeviceConfigPanel() {
 
   const { data: devices } = useQuery({
     queryKey: ["/api/devices"],
+    refetchInterval: 5000, // Refresh every 5 seconds
   });
 
   const addDevice = useMutation({
@@ -222,22 +235,52 @@ export function DeviceConfigPanel() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      IP: {device.ipAddress}:{device.port}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Status:{" "}
-                      <span
-                        className={
-                          device.status === "online"
-                            ? "text-green-500"
-                            : "text-red-500"
-                        }
-                      >
-                        {device.status}
-                      </span>
-                    </p>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Signal className="h-4 w-4" />
+                        <span>Status:</span>
+                        <motion.span
+                          animate={{
+                            color: device.status === "online" ? "#22c55e" : "#ef4444",
+                          }}
+                          className="font-medium"
+                        >
+                          {device.status}
+                        </motion.span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        <span>Uptime:</span>
+                        <motion.span
+                          key={device.lastHeartbeat}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="font-medium"
+                        >
+                          {formatUptime(device.lastHeartbeat)}
+                        </motion.span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Wifi className="h-4 w-4" />
+                        <span>Address:</span>
+                        <span className="font-medium">
+                          {device.ipAddress}:{device.port}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Activity className="h-4 w-4" />
+                        <span>Last Activity:</span>
+                        <span className="font-medium">
+                          {device.lastHeartbeat
+                            ? new Date(device.lastHeartbeat).toLocaleString()
+                            : "Never"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
