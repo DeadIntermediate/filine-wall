@@ -7,6 +7,7 @@ import { dncRegistry } from "./dncRegistry";
 import { generateVerificationCode } from "./callerVerification";
 import { analyzeVoiceStream } from "./voiceAnalysis";
 import { lookupCarrier } from "./carrierLookup";
+import { SpamDatabaseService } from "./spamDatabaseService";
 
 interface ScreeningResult {
   action: "blocked" | "allowed" | "challenge";
@@ -42,6 +43,7 @@ interface ScreeningResult {
     carrierCountry?: string;
     isMobile?: boolean;
     lineType?: string;
+    fccData?: any;
   };
 }
 
@@ -52,6 +54,23 @@ export async function screenCall(
 ): Promise<ScreeningResult> {
   // Get carrier information
   const carrierInfo = await lookupCarrier(phoneNumber);
+
+  // Check FCC spam database
+  const fccCheck = await SpamDatabaseService.checkNumber(phoneNumber);
+  if (fccCheck.isSpam) {
+    const verificationResult = await generateVerificationCode(phoneNumber);
+    return {
+      action: "blocked",
+      reason: "Number found in FCC spam database",
+      risk: 0.9,
+      metadata: {
+        lineType: carrierInfo.lineType,
+        carrierName: carrierInfo.carrier,
+        carrierType: carrierInfo.lineType,
+        fccData: fccCheck.details
+      }
+    };
+  }
 
   // Check if number is whitelisted
   const whitelisted = await db.query.phoneNumbers.findFirst({
