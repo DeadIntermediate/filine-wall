@@ -6,6 +6,7 @@ import Settings from "@/pages/Settings";
 import VerifyCaller from "@/pages/VerifyCaller";
 import { Layout } from "@/components/Layout";
 import { ThemeProvider } from "@/components/ui/theme-provider";
+import { FCCDatabaseView } from "@/components/FCCDatabaseView";
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
               <Route path="/numbers" component={NumberManagement} />
               <Route path="/history" component={CallHistory} />
               <Route path="/settings" component={Settings} />
+              <Route path="/fcc-database" component={FCCDatabaseView} />
             </Switch>
           </Layout>
         </Route>

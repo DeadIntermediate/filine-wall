@@ -7,6 +7,7 @@ import { screenCall, logCall } from "./services/callScreening";
 import { calculateReputationScore } from "./services/reputationScoring";
 import { verifyCode, getVerificationAttempts } from "./services/callerVerification";
 import { randomBytes } from "crypto";
+import { SpamDatabaseService } from "./services/spamDatabaseService"; 
 
 export function registerRoutes(app: Express): Server {
   // Get all phone numbers
@@ -668,6 +669,17 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({
         message: error.message || "Failed to set up repository",
       });
+    }
+  });
+
+  // Add this to the existing routes in registerRoutes function
+  app.get("/api/fcc-database", async (_req, res) => {
+    try {
+      const result = await SpamDatabaseService.getDatabaseEntries();
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching FCC database:", error);
+      res.status(500).json({ message: "Failed to fetch FCC database" });
     }
   });
 

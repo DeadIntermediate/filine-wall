@@ -92,4 +92,13 @@ export class SpamDatabaseService {
       details: record,
     };
   }
+
+  static async getDatabaseEntries(): Promise<FCCSpamRecord[]> {
+    // Refresh cache if needed
+    if (!this.lastUpdate || Date.now() - this.lastUpdate.getTime() > this.CACHE_DURATION) {
+      await this.refreshDatabase().catch(console.error);
+    }
+
+    return Array.from(this.cache.values());
+  }
 }
