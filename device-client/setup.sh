@@ -14,25 +14,26 @@ apt-get update
 apt-get upgrade -y
 
 echo "Installing required packages..."
-apt-get install -y python3 python3-pip python3-venv
+apt-get install -y python3 python3-pip python3-venv python3-dev libffi-dev build-essential
 
 # Create service user
 echo "Creating service user..."
 useradd -r -s /bin/false calldetector || true
 
-# Create necessary directories
+# Create necessary directories with secure permissions
 echo "Setting up directories..."
 mkdir -p /etc/call-detector
 mkdir -p /var/log/call-detector
 chown calldetector:calldetector /var/log/call-detector
+chmod 700 /etc/call-detector  # Only owner can access
 
 # Install Python dependencies
 echo "Installing Python packages..."
-python3 -m pip install requests
+python3 -m pip install requests cryptography
 
 # Copy files
 echo "Installing service files..."
-cp call_detector.py /usr/local/bin/
+cp call_detector.py encryption.py /usr/local/bin/
 chmod +x /usr/local/bin/call_detector.py
 
 # Create systemd service file
@@ -52,7 +53,7 @@ RestartSec=10
 WantedBy=multi-user.target
 EOL
 
-# Create default config file
+# Create default config file with secure permissions
 cat > /etc/call-detector/config.ini << EOL
 [server]
 url = http://your-web-interface-url
@@ -64,7 +65,7 @@ EOL
 
 # Set proper permissions
 chown -R calldetector:calldetector /etc/call-detector
-chmod 600 /etc/call-detector/config.ini
+chmod 600 /etc/call-detector/config.ini  # Only owner can read/write config
 
 # Enable and start service
 echo "Enabling and starting service..."

@@ -232,10 +232,10 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Screen call with device information
+  // Screen call with device information and encryption
   app.post("/api/devices/:deviceId/screen", async (req, res) => {
     const { deviceId } = req.params;
-    const { phoneNumber } = req.body;
+    const { data: encryptedData } = req.body;
     const authToken = req.headers.authorization?.split(' ')[1];
 
     // Verify device auth token
@@ -247,6 +247,9 @@ export function registerRoutes(app: Express): Server {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    // TODO: Add server-side decryption when implementing end-to-end encryption
+    const { phoneNumber } = JSON.parse(encryptedData);
+
     if (!phoneNumber) {
       return res.status(400).json({ message: "Phone number is required" });
     }
@@ -254,7 +257,9 @@ export function registerRoutes(app: Express): Server {
     try {
       const result = await screenCall(phoneNumber);
       await logCall(phoneNumber, { ...result, deviceId });
-      res.json(result);
+
+      // TODO: Add server-side encryption when implementing end-to-end encryption
+      res.json({ data: JSON.stringify(result) });
     } catch (error) {
       console.error("Error screening call:", error);
       res.status(500).json({ message: "Error screening call" });
@@ -294,9 +299,10 @@ export function registerRoutes(app: Express): Server {
     res.json(device);
   });
 
-  // Device heartbeat endpoint
+  // Device heartbeat endpoint with encryption
   app.post("/api/devices/:deviceId/heartbeat", async (req, res) => {
     const { deviceId } = req.params;
+    const { data: encryptedData } = req.body;
     const authToken = req.headers.authorization?.split(' ')[1];
 
     // Verify device auth token
@@ -308,6 +314,9 @@ export function registerRoutes(app: Express): Server {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    // TODO: Add server-side decryption when implementing end-to-end encryption
+    const heartbeatData = JSON.parse(encryptedData);
+
     // Update device status and last heartbeat
     const [updated] = await db
       .update(deviceConfigurations)
@@ -318,7 +327,8 @@ export function registerRoutes(app: Express): Server {
       .where(eq(deviceConfigurations.deviceId, deviceId))
       .returning();
 
-    res.json(updated);
+    // TODO: Add server-side encryption when implementing end-to-end encryption
+    res.json({ data: JSON.stringify(updated) });
   });
 
   // Get verification status
@@ -411,7 +421,6 @@ export function registerRoutes(app: Express): Server {
 
     res.json(setting);
   });
-
 
   // Get time distribution statistics
   app.get("/api/stats/time-distribution", async (req, res) => {
