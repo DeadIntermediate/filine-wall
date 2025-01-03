@@ -3,7 +3,7 @@ import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 
 export const phoneNumbers = pgTable("phone_numbers", {
   id: serial("id").primaryKey(),
-  number: text("number").notNull(),
+  number: text("number").notNull().unique(), // Added unique constraint
   type: text("type").notNull(), // blacklist or whitelist
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
