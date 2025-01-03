@@ -27,6 +27,15 @@ export function Sidebar({ items, children }: SidebarProps) {
         "relative flex h-screen flex-col border-r bg-sidebar transition-all duration-300",
         isCollapsed ? "w-[80px]" : "w-[240px]"
       )}
+      initial={false}
+      animate={{
+        width: isCollapsed ? 80 : 240,
+      }}
+      transition={{
+        type: "spring",
+        stiffness: 300,
+        damping: 30
+      }}
     >
       <div className="flex flex-col gap-2 p-4">
         <AnimatePresence mode="wait" initial={false}>
@@ -39,8 +48,8 @@ export function Sidebar({ items, children }: SidebarProps) {
                 key={item.href}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.2 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
               >
                 <Link href={item.href}>
                   <Button
@@ -51,19 +60,19 @@ export function Sidebar({ items, children }: SidebarProps) {
                     )}
                   >
                     <motion.div
-                      whileHover={{ rotate: 360 }}
-                      transition={{ duration: 0.3 }}
+                      whileHover={{ rotate: 360, scale: 1.1 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 17 }}
                     >
                       <Icon className="h-5 w-5" />
                     </motion.div>
                     <AnimatePresence mode="wait">
                       {!isCollapsed && (
                         <motion.span
-                          initial={{ opacity: 0, width: 0 }}
-                          animate={{ opacity: 1, width: "auto" }}
-                          exit={{ opacity: 0, width: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="overflow-hidden"
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -10 }}
+                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                          className="overflow-hidden whitespace-nowrap"
                         >
                           {item.name}
                         </motion.span>
@@ -87,7 +96,7 @@ export function Sidebar({ items, children }: SidebarProps) {
       >
         <motion.div
           animate={{ rotate: isCollapsed ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
         >
           <ChevronLeft className="h-4 w-4" />
         </motion.div>
