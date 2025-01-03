@@ -183,6 +183,21 @@ export async function screenCall(
 }
 
 export async function logCall(phoneNumber: string, result: ScreeningResult) {
+  const callerIdInfo = {
+    name: result.metadata?.callerName || "Unknown",
+    type: result.metadata?.callerType || "Unknown",
+    presentation: result.metadata?.callerPresentation || "allowed",
+    verified: result.metadata?.callerVerified || false,
+    timestamp: new Date().toISOString()
+  };
+
+  const carrierInfo = {
+    name: result.metadata?.carrierName,
+    type: result.metadata?.carrierType,
+    country: result.metadata?.carrierCountry,
+    mobile: result.metadata?.isMobile
+  };
+
   await db.insert(callLogs).values({
     phoneNumber,
     action: result.action === "challenge" ? "blocked" : result.action,
@@ -196,7 +211,10 @@ export async function logCall(phoneNumber: string, result: ScreeningResult) {
       verification: result.verification ? {
         provided: true,
         expiresAt: result.verification.expiresAt
-      } : undefined
-    }
+      } : undefined,
+      lineType: result.metadata?.lineType || "unknown"
+    },
+    callerId: callerIdInfo,
+    carrierInfo,
   });
 }

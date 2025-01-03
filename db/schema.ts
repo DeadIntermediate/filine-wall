@@ -12,6 +12,7 @@ export const phoneNumbers = pgTable("phone_numbers", {
   reputationScore: decimal("reputation_score", { precision: 5, scale: 2 }).default('50'),
   lastScoreUpdate: timestamp("last_score_update").defaultNow(),
   scoreFactors: jsonb("score_factors"), // Store detailed scoring factors
+  callerIdInfo: jsonb("caller_id_info"), // Store caller ID information
 });
 
 export const callLogs = pgTable("call_logs", {
@@ -23,6 +24,9 @@ export const callLogs = pgTable("call_logs", {
   metadata: jsonb("metadata"),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  callerId: jsonb("caller_id").notNull(), // Store structured caller ID data
+  carrierInfo: jsonb("carrier_info"), // Store carrier information
+  lineType: text("line_type"), // mobile, landline, voip, etc.
 });
 
 export const spamReports = pgTable("spam_reports", {

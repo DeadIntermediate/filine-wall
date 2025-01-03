@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
 import { voicePatternLearner } from "./voicePatternLearning";
+import { detectScamPhrases } from "./scamPhraseDetection";
 
 interface VoiceAnalysisResult {
   isRobot: boolean;
@@ -30,11 +31,25 @@ interface VoiceAnalysisResult {
       matchedType: string;
       confidence: number;
     };
+    pausePatterns?: number[];
+    responseLatency?: number[];
+    intonationVariance?: number;
 
+  };
+  scamDetection?: {
+    isScam: boolean;
+    confidence: number;
+    detectedPhrases: string[];
+    category?: string;
+    aiVoiceIndicators?: {
+      clonedVoicePatterns: boolean;
+      artificialPauses: boolean;
+      scriptedResponses: boolean;
+      confidence: number;
+    };
   };
 }
 
-// Python script for voice analysis with multi-language support
 const VOICE_ANALYSIS_SCRIPT = `
 import sys
 import json
@@ -114,6 +129,23 @@ def analyze_voice_stream(audio_data, sample_rate):
         language_patterns.get('suspicious', False)  # Suspicious language patterns
     )
 
+    # Add pause pattern analysis
+    onset_env = librosa.onset.onset_strength(y=y, sr=sample_rate)
+    tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sample_rate)
+
+    # Calculate pause patterns
+    pause_patterns = []
+    for i in range(1, len(beats)):
+        pause_patterns.append(beats[i] - beats[i-1])
+
+    # Calculate response latency patterns (time between speech segments)
+    response_latency = []
+    mse = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
+    speech_segments = librosa.effects.split(y, top_db=20)
+    for i in range(1, len(speech_segments)):
+        response_latency.append((speech_segments[i][0] - speech_segments[i-1][1]) / sample_rate)
+
+
     return {
         'is_robot': bool(is_robot),
         'confidence': float(max(0.6, 1 - naturalness)),
@@ -129,8 +161,10 @@ def analyze_voice_stream(audio_data, sample_rate):
             'spectralBandwidth': np.mean(spec_bandwidth).tolist(),
             'zeroCrossings': speech_rate,
             'energy': np.mean(librosa.feature.rms(y=y, frame_length=2048, hop_length=512)).tolist(),
-            'pitchVariance': np.var(pitches[magnitudes > np.max(magnitudes)/2]).tolist()
-
+            'pitchVariance': np.var(pitches[magnitudes > np.max(magnitudes)/2]).tolist(),
+            'pausePatterns': pause_patterns,
+            'responseLatency': response_latency,
+            'intonationVariance': float(np.var(pitches[magnitudes > np.max(magnitudes)/2]))
         }
     }
 
@@ -182,7 +216,7 @@ if __name__ == '__main__':
         input_data['sample_rate']
     )
     print(json.dumps(result))
-`
+`;
 
 export async function analyzeVoiceStream(audioData: number[], sampleRate: number): Promise<VoiceAnalysisResult> {
   try {
@@ -237,7 +271,10 @@ export async function analyzeVoiceStream(audioData: number[], sampleRate: number
       rhythm: {
         tempo: analysis.patterns.tempo || 0,
         beatStrength: analysis.patterns.beatStrength || 0
-      }
+      },
+      pausePatterns: analysis.patterns.pausePatterns || [],
+      responseLatency: analysis.patterns.responseLatency || [],
+      intonationVariance: analysis.patterns.intonationVariance || 0,
     };
 
     // Match against learned patterns
@@ -252,6 +289,20 @@ export async function analyzeVoiceStream(audioData: number[], sampleRate: number
         features,
         analysis.is_robot ? 'robot' : 'legitimate',
         analysis.language?.detected
+      );
+    }
+
+    // Perform scam phrase detection if we have transcribed text
+    let scamDetection;
+    if (analysis.language && analysis.language.detected) {
+      scamDetection = await detectScamPhrases(
+        analysis.language.detected,
+        analysis.language?.detected || 'en',
+        {
+          pausePatterns: analysis.patterns.pausePatterns || [],
+          responseLatency: analysis.patterns.responseLatency || [],
+          intonationVariance: analysis.patterns.intonationVariance || 0
+        }
       );
     }
 
@@ -270,7 +321,8 @@ export async function analyzeVoiceStream(audioData: number[], sampleRate: number
           matchedType: patternMatch.type,
           confidence: patternMatch.confidence
         }
-      }
+      },
+      scamDetection
     };
   } catch (error) {
     console.error('Voice analysis failed:', error);
