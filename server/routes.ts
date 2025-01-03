@@ -366,6 +366,30 @@ export function registerRoutes(app: Express): Server {
   });
 
 
+  // Get time distribution statistics
+  app.get("/api/stats/time-distribution", async (req, res) => {
+    const timeDistribution = await db
+      .select({
+        hour: callLogs.timeOfDay,
+        count: sql<number>`count(*)`,
+        risk: sql<number>`
+          avg(
+            CASE 
+              WHEN metadata->>'risk' IS NOT NULL 
+              THEN (metadata->>'risk')::numeric 
+              ELSE 0 
+            END
+          ) * 100
+        `
+      })
+      .from(callLogs)
+      .where(sql`${callLogs.timestamp} >= NOW() - INTERVAL '7 days'`)
+      .groupBy(callLogs.timeOfDay)
+      .orderBy(callLogs.timeOfDay);
+
+    res.json(timeDistribution);
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -3,6 +3,7 @@ import { Statistics } from "@/components/Statistics";
 import { HeatmapView } from "@/components/HeatmapView";
 import { RiskScoreGauge } from "@/components/RiskScoreGauge";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { CallTrendAnalytics } from "@/components/CallTrendAnalytics";
 import { useQuery } from "@tanstack/react-query";
 
 export default function Dashboard() {
@@ -49,6 +50,8 @@ export default function Dashboard() {
 
         <RiskScoreGauge score={riskScore?.currentRisk || 0} label="Current Risk Level" />
       </div>
+
+      <CallTrendAnalytics />
 
       <div className="grid gap-6 md:grid-cols-2">
         <HeatmapView />
