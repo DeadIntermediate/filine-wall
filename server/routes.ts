@@ -2,10 +2,11 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
 import { desc, eq, sql } from "drizzle-orm";
-import { phoneNumbers, callLogs, spamReports, featureSettings } from "@db/schema";
+import { phoneNumbers, callLogs, spamReports, featureSettings, deviceConfigurations } from "@db/schema";
 import { screenCall, logCall } from "./services/callScreening";
 import { calculateReputationScore } from "./services/reputationScoring";
 import { verifyCode, getVerificationAttempts } from "./services/callerVerification";
+import { randomBytes } from "crypto";
 
 export function registerRoutes(app: Express): Server {
   // Get all phone numbers
@@ -231,9 +232,20 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Screen call
-  app.post("/api/screen", async (req, res) => {
+  // Screen call with device information
+  app.post("/api/devices/:deviceId/screen", async (req, res) => {
+    const { deviceId } = req.params;
     const { phoneNumber } = req.body;
+    const authToken = req.headers.authorization?.split(' ')[1];
+
+    // Verify device auth token
+    const device = await db.query.deviceConfigurations.findFirst({
+      where: eq(deviceConfigurations.deviceId, deviceId),
+    });
+
+    if (!device || device.authToken !== authToken) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     if (!phoneNumber) {
       return res.status(400).json({ message: "Phone number is required" });
@@ -241,7 +253,7 @@ export function registerRoutes(app: Express): Server {
 
     try {
       const result = await screenCall(phoneNumber);
-      await logCall(phoneNumber, result);
+      await logCall(phoneNumber, { ...result, deviceId });
       res.json(result);
     } catch (error) {
       console.error("Error screening call:", error);
@@ -249,29 +261,64 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Verify caller identity
-  app.post("/api/verify", async (req, res) => {
-    const { phoneNumber, code } = req.body;
 
-    if (!phoneNumber || !code) {
-      return res.status(400).json({ message: "Phone number and verification code are required" });
+  // Get all devices
+  app.get("/api/devices", async (req, res) => {
+    const devices = await db.query.deviceConfigurations.findMany({
+      orderBy: desc(deviceConfigurations.updatedAt),
+    });
+    res.json(devices);
+  });
+
+  // Add new device
+  app.post("/api/devices", async (req, res) => {
+    const { name, ipAddress, port, deviceType } = req.body;
+
+    // Generate a unique device ID and auth token
+    const deviceId = `device_${randomBytes(8).toString('hex')}`;
+    const authToken = randomBytes(32).toString('hex');
+
+    const [device] = await db
+      .insert(deviceConfigurations)
+      .values({
+        deviceId,
+        name,
+        ipAddress,
+        port,
+        deviceType,
+        authToken,
+        status: 'offline',
+      })
+      .returning();
+
+    res.json(device);
+  });
+
+  // Device heartbeat endpoint
+  app.post("/api/devices/:deviceId/heartbeat", async (req, res) => {
+    const { deviceId } = req.params;
+    const authToken = req.headers.authorization?.split(' ')[1];
+
+    // Verify device auth token
+    const device = await db.query.deviceConfigurations.findFirst({
+      where: eq(deviceConfigurations.deviceId, deviceId),
+    });
+
+    if (!device || device.authToken !== authToken) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // Check for too many attempts
-    const attempts = await getVerificationAttempts(phoneNumber);
-    if (attempts >= 5) {
-      return res.status(429).json({
-        message: "Too many verification attempts. Please try again after 24 hours."
-      });
-    }
+    // Update device status and last heartbeat
+    const [updated] = await db
+      .update(deviceConfigurations)
+      .set({
+        status: 'online',
+        lastHeartbeat: new Date(),
+      })
+      .where(eq(deviceConfigurations.deviceId, deviceId))
+      .returning();
 
-    try {
-      const result = await verifyCode(phoneNumber, code);
-      res.json(result);
-    } catch (error) {
-      console.error("Error verifying caller:", error);
-      res.status(500).json({ message: "Error verifying caller" });
-    }
+    res.json(updated);
   });
 
   // Get verification status
@@ -388,6 +435,31 @@ export function registerRoutes(app: Express): Server {
       .orderBy(callLogs.timeOfDay);
 
     res.json(timeDistribution);
+  });
+
+  // Verify caller identity
+  app.post("/api/verify", async (req, res) => {
+    const { phoneNumber, code } = req.body;
+
+    if (!phoneNumber || !code) {
+      return res.status(400).json({ message: "Phone number and verification code are required" });
+    }
+
+    // Check for too many attempts
+    const attempts = await getVerificationAttempts(phoneNumber);
+    if (attempts >= 5) {
+      return res.status(429).json({
+        message: "Too many verification attempts. Please try again after 24 hours."
+      });
+    }
+
+    try {
+      const result = await verifyCode(phoneNumber, code);
+      res.json(result);
+    } catch (error) {
+      console.error("Error verifying caller:", error);
+      res.status(500).json({ message: "Error verifying caller" });
+    }
   });
 
   const httpServer = createServer(app);

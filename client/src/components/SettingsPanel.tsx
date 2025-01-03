@@ -6,6 +6,7 @@ import { Settings, Shield, Phone, MapPin, Clock, Users, Activity } from "lucide-
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
+import { DeviceConfigPanel } from "@/components/DeviceConfigPanel";
 
 interface Feature {
   key: string;
@@ -87,72 +88,82 @@ export function SettingsPanel() {
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-next gap-2">
-          <Settings className="h-5 w-5" />
-          Feature Settings
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <motion.div 
-          className="space-y-6"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <AnimatePresence>
-            {features.map((feature) => (
-              <motion.div
-                key={feature.key}
-                className="flex items-center justify-between space-x-2"
-                initial={{ x: -20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: 20, opacity: 0 }}
-                whileHover={{ scale: 1.02 }}
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              >
-                <div className="flex-1 space-y-1">
-                  <motion.div 
-                    className="flex items-center"
-                    whileHover={{ x: 5 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                  >
-                    <motion.div
-                      whileHover={{ rotate: 360 }}
-                      transition={{ duration: 0.5 }}
-                    >
-                      {feature.icon}
-                    </motion.div>
-                    <Label className="ml-2" htmlFor={feature.key}>
-                      {feature.name}
-                    </Label>
-                  </motion.div>
-                  <motion.p 
-                    className="text-sm text-muted-foreground"
-                    initial={{ opacity: 0.6 }}
-                    whileHover={{ opacity: 1 }}
-                  >
-                    {feature.description}
-                  </motion.p>
-                </div>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-next gap-2">
+            <Settings className="h-5 w-5" />
+            Feature Settings
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <motion.div 
+            className="space-y-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <AnimatePresence>
+              {features.map((feature) => (
                 <motion.div
-                  whileTap={{ scale: 0.9 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  key={feature.key}
+                  className="flex items-center justify-between space-x-2"
+                  initial={{ x: -20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: 20, opacity: 0 }}
+                  whileHover={{ scale: 1.02 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 >
-                  <Switch
-                    id={feature.key}
-                    checked={settings[feature.key]?.isEnabled ?? true}
-                    onCheckedChange={(enabled) =>
-                      updateSetting.mutate({ key: feature.key, enabled })
-                    }
-                  />
+                  <div className="flex-1 space-y-1">
+                    <motion.div 
+                      className="flex items-center"
+                      whileHover={{ x: 5 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                    >
+                      <motion.div
+                        whileHover={{ rotate: 360 }}
+                        transition={{ duration: 0.5 }}
+                      >
+                        {feature.icon}
+                      </motion.div>
+                      <Label className="ml-2" htmlFor={feature.key}>
+                        {feature.name}
+                      </Label>
+                    </motion.div>
+                    <motion.p 
+                      className="text-sm text-muted-foreground"
+                      initial={{ opacity: 0.6 }}
+                      whileHover={{ opacity: 1 }}
+                    >
+                      {feature.description}
+                    </motion.p>
+                  </div>
+                  <motion.div
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  >
+                    <Switch
+                      id={feature.key}
+                      checked={settings[feature.key]?.isEnabled ?? true}
+                      onCheckedChange={(enabled) =>
+                        updateSetting.mutate({ key: feature.key, enabled })
+                      }
+                    />
+                  </motion.div>
                 </motion.div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
-      </CardContent>
-    </Card>
+              ))}
+            </AnimatePresence>
+          </motion.div>
+        </CardContent>
+      </Card>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2, type: "spring", stiffness: 300, damping: 30 }}
+      >
+        <DeviceConfigPanel />
+      </motion.div>
+    </div>
   );
 }

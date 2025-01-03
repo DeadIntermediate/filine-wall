@@ -30,6 +30,7 @@ export const callLogs = pgTable("call_logs", {
   lineType: text("line_type"), // mobile, landline, voip, etc.
   timeOfDay: integer("time_of_day"), // Hour of day (0-23) for pattern analysis
   dayOfWeek: integer("day_of_week"), // Day of week (0-6) for pattern analysis
+  deviceId: text("device_id"), // Reference to the device that processed this call
 });
 
 export const spamReports = pgTable("spam_reports", {
@@ -98,6 +99,21 @@ export const featureSettings = pgTable("feature_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const deviceConfigurations = pgTable("device_configurations", {
+  id: serial("id").primaryKey(),
+  deviceId: text("device_id").notNull().unique(),
+  name: text("name").notNull(),
+  ipAddress: text("ip_address").notNull(),
+  port: integer("port").notNull(),
+  deviceType: text("device_type").notNull(), // e.g., 'raspberry_pi', 'android', 'custom'
+  status: text("status").default('offline').notNull(),
+  lastHeartbeat: timestamp("last_heartbeat"),
+  authToken: text("auth_token").notNull(),
+  settings: jsonb("settings"), // Store device-specific settings
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const insertPhoneNumberSchema = createInsertSchema(phoneNumbers);
 export const selectPhoneNumberSchema = createSelectSchema(phoneNumbers);
 export const insertCallLogSchema = createInsertSchema(callLogs);
@@ -114,6 +130,8 @@ export const insertGeoRuleSchema = createInsertSchema(geoRules);
 export const selectGeoRuleSchema = createSelectSchema(geoRules);
 export const insertFeatureSettingSchema = createInsertSchema(featureSettings);
 export const selectFeatureSettingSchema = createSelectSchema(featureSettings);
+export const insertDeviceConfigurationSchema = createInsertSchema(deviceConfigurations);
+export const selectDeviceConfigurationSchema = createSelectSchema(deviceConfigurations);
 
 export type PhoneNumber = typeof phoneNumbers.$inferSelect;
 export type InsertPhoneNumber = typeof phoneNumbers.$inferInsert;
@@ -131,3 +149,5 @@ export type GeoRule = typeof geoRules.$inferSelect;
 export type InsertGeoRule = typeof geoRules.$inferInsert;
 export type FeatureSetting = typeof featureSettings.$inferSelect;
 export type InsertFeatureSetting = typeof featureSettings.$inferInsert;
+export type DeviceConfiguration = typeof deviceConfigurations.$inferSelect;
+export type InsertDeviceConfiguration = typeof deviceConfigurations.$inferInsert;
