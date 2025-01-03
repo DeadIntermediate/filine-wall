@@ -1,6 +1,6 @@
 import { SidebarProvider } from "@/components/ui/sidebar-provider";
 import { Sidebar } from "@/components/ui/sidebar";
-import { Phone, Shield, ClipboardList, Settings, Sun, Moon } from "lucide-react";
+import { Phone, Shield, ClipboardList, Settings, Sun, Moon, Database } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ReactNode } from "react";
 import { useTheme } from "@/components/ui/theme-provider";
@@ -16,6 +16,7 @@ const navigation: NavigationItem[] = [
   { name: "Dashboard", href: "/", icon: Shield },
   { name: "Number Management", href: "/numbers", icon: Phone },
   { name: "Call History", href: "/history", icon: ClipboardList },
+  { name: "FCC Database", href: "/fcc-database", icon: Database },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
