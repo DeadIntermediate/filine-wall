@@ -13,6 +13,7 @@ export const phoneNumbers = pgTable("phone_numbers", {
   lastScoreUpdate: timestamp("last_score_update").defaultNow(),
   scoreFactors: jsonb("score_factors"), // Store detailed scoring factors
   callerIdInfo: jsonb("caller_id_info"), // Store caller ID information
+  blockingRules: jsonb("blocking_rules"), // Store custom blocking rules
 });
 
 export const callLogs = pgTable("call_logs", {
@@ -27,6 +28,8 @@ export const callLogs = pgTable("call_logs", {
   callerId: jsonb("caller_id").notNull(), // Store structured caller ID data
   carrierInfo: jsonb("carrier_info"), // Store carrier information
   lineType: text("line_type"), // mobile, landline, voip, etc.
+  timeOfDay: integer("time_of_day"), // Hour of day (0-23) for pattern analysis
+  dayOfWeek: integer("day_of_week"), // Day of week (0-6) for pattern analysis
 });
 
 export const spamReports = pgTable("spam_reports", {
@@ -38,6 +41,30 @@ export const spamReports = pgTable("spam_reports", {
   status: text("status").default('pending').notNull(), // pending, verified, rejected
   confirmations: integer("confirmations").default(1).notNull(),
   metadata: jsonb("metadata"), // Additional report details
+  reporterScore: decimal("reporter_score", { precision: 5, scale: 2 }), // Reputation score for reporter
+  audioSampleUrl: text("audio_sample_url"), // URL to stored audio sample
+  location: jsonb("location"), // Reporter's location for geographic analysis
+});
+
+export const callPatterns = pgTable("call_patterns", {
+  id: serial("id").primaryKey(),
+  phoneNumber: text("phone_number").notNull(),
+  patternType: text("pattern_type").notNull(), // sequential, time-based, geographic
+  patternData: jsonb("pattern_data").notNull(), // Store pattern details
+  confidence: decimal("confidence", { precision: 5, scale: 2 }).notNull(),
+  detectedAt: timestamp("detected_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  active: boolean("active").default(true),
+});
+
+export const geoRules = pgTable("geo_rules", {
+  id: serial("id").primaryKey(),
+  region: text("region").notNull(), // Country code or region identifier
+  riskLevel: decimal("risk_level", { precision: 5, scale: 2 }).notNull(),
+  blockingEnabled: boolean("blocking_enabled").default(false),
+  rules: jsonb("rules").notNull(), // Specific rules for the region
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const verificationCodes = pgTable("verification_codes", {
@@ -73,6 +100,10 @@ export const insertVerificationCodeSchema = createInsertSchema(verificationCodes
 export const selectVerificationCodeSchema = createSelectSchema(verificationCodes);
 export const insertVoicePatternSchema = createInsertSchema(voicePatterns);
 export const selectVoicePatternSchema = createSelectSchema(voicePatterns);
+export const insertCallPatternSchema = createInsertSchema(callPatterns);
+export const selectCallPatternSchema = createSelectSchema(callPatterns);
+export const insertGeoRuleSchema = createInsertSchema(geoRules);
+export const selectGeoRuleSchema = createSelectSchema(geoRules);
 
 export type PhoneNumber = typeof phoneNumbers.$inferSelect;
 export type InsertPhoneNumber = typeof phoneNumbers.$inferInsert;
@@ -84,3 +115,7 @@ export type VerificationCode = typeof verificationCodes.$inferSelect;
 export type InsertVerificationCode = typeof verificationCodes.$inferInsert;
 export type VoicePattern = typeof voicePatterns.$inferSelect;
 export type InsertVoicePattern = typeof voicePatterns.$inferInsert;
+export type CallPattern = typeof callPatterns.$inferSelect;
+export type InsertCallPattern = typeof callPatterns.$inferInsert;
+export type GeoRule = typeof geoRules.$inferSelect;
+export type InsertGeoRule = typeof geoRules.$inferInsert;
