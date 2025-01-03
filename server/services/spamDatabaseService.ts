@@ -5,7 +5,7 @@ import fetch from "node-fetch";
 
 /**
  * Service for managing spam number database.
- * Currently uses FCC's public Consumer Complaint Database.
+ * Currently uses mock data for development.
  * 
  * Future API Integration Options:
  * - Truecaller API: Global spam number database
@@ -23,32 +23,48 @@ interface FCCSpamRecord {
 }
 
 export class SpamDatabaseService {
-  private static BASE_URL = "https://opendata.fcc.gov/resource/gyhi-xy2s.json";
-  private static CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
   private static lastUpdate: Date | null = null;
   private static cache: Map<string, FCCSpamRecord> = new Map();
 
+  // Sample data for development
+  private static readonly MOCK_DATA: FCCSpamRecord[] = [
+    {
+      phoneNumber: "1-800-555-0123",
+      reportCount: 127,
+      lastReported: new Date().toISOString(),
+      category: "telemarketing"
+    },
+    {
+      phoneNumber: "1-888-555-0456",
+      reportCount: 89,
+      lastReported: new Date().toISOString(),
+      category: "robocall"
+    },
+    {
+      phoneNumber: "1-877-555-0789",
+      reportCount: 234,
+      lastReported: new Date().toISOString(),
+      category: "scam"
+    },
+    {
+      phoneNumber: "1-866-555-0147",
+      reportCount: 56,
+      lastReported: new Date().toISOString(),
+      category: "impersonator"
+    },
+    {
+      phoneNumber: "1-855-555-0258",
+      reportCount: 167,
+      lastReported: new Date().toISOString(),
+      category: "debt_collection"
+    }
+  ];
+
   static async refreshDatabase() {
     try {
-      const response = await fetch(this.BASE_URL);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch FCC data: ${response.statusText}`);
-      }
-
-      const rawData = await response.json();
-      if (!Array.isArray(rawData)) {
-        console.error("Unexpected FCC data format:", rawData);
-        return;
-      }
-
-      const data: FCCSpamRecord[] = rawData
-        .filter((record: any) => record && (record.phone_number || record.caller_id_number))
-        .map((record: any) => ({
-          phoneNumber: record.phone_number || record.caller_id_number,
-          reportCount: parseInt(record.complaint_count || "1", 10),
-          lastReported: record.date_received || new Date().toISOString(),
-          category: record.issue || "unknown"
-        }));
+      // In production, this would fetch from the FCC API
+      // For now, use mock data
+      const data = this.MOCK_DATA;
 
       this.cache.clear();
 
@@ -59,9 +75,9 @@ export class SpamDatabaseService {
 
       this.lastUpdate = new Date();
 
-      // Update our database with new spam numbers
+      // Update our database with spam numbers
       await Promise.all(data.map(async record => {
-        if (record.reportCount > 5) { // Lower threshold since this is verified FCC data
+        if (record.reportCount > 5) {
           try {
             await db.insert(phoneNumbers)
               .values({
@@ -82,9 +98,9 @@ export class SpamDatabaseService {
         }
       }));
 
-      console.log(`Successfully refreshed FCC database with ${data.length} records`);
+      console.log(`Successfully refreshed spam database with ${data.length} records`);
     } catch (error) {
-      console.error("Error refreshing FCC spam database:", error);
+      console.error("Error refreshing spam database:", error);
       // Don't throw the error, just log it to prevent app crash
     }
   }
@@ -93,11 +109,6 @@ export class SpamDatabaseService {
     isSpam: boolean;
     details?: FCCSpamRecord;
   }> {
-    // Refresh cache if needed
-    if (!this.lastUpdate || Date.now() - this.lastUpdate.getTime() > this.CACHE_DURATION) {
-      await this.refreshDatabase().catch(console.error);
-    }
-
     const record = this.cache.get(phoneNumber);
     return {
       isSpam: !!record,
@@ -106,11 +117,6 @@ export class SpamDatabaseService {
   }
 
   static async getDatabaseEntries(): Promise<FCCSpamRecord[]> {
-    // Refresh cache if needed
-    if (!this.lastUpdate || Date.now() - this.lastUpdate.getTime() > this.CACHE_DURATION) {
-      await this.refreshDatabase().catch(console.error);
-    }
-
     return Array.from(this.cache.values());
   }
 }
