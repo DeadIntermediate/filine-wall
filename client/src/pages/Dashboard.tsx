@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Statistics } from "@/components/Statistics";
 import { HeatmapView } from "@/components/HeatmapView";
 import { RiskScoreGauge } from "@/components/RiskScoreGauge";
+import { SettingsPanel } from "@/components/SettingsPanel";
 import { useQuery } from "@tanstack/react-query";
 
 export default function Dashboard() {
@@ -49,7 +50,10 @@ export default function Dashboard() {
         <RiskScoreGauge score={riskScore?.currentRisk || 0} label="Current Risk Level" />
       </div>
 
-      <HeatmapView />
+      <div className="grid gap-6 md:grid-cols-2">
+        <HeatmapView />
+        <SettingsPanel />
+      </div>
 
       <Card>
         <CardHeader>
