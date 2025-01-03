@@ -3,7 +3,7 @@ import { Sidebar } from "@/components/ui/sidebar";
 import { Phone, Shield, ClipboardList, Settings, Sun, Moon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ReactNode } from "react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/ui/theme-provider";
 import { Button } from "@/components/ui/button";
 
 interface NavigationItem {
