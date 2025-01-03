@@ -2,10 +2,10 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Settings, Shield, Phone, MapPin, Clock, Users, Activity } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface Feature {
   key: string;
@@ -56,7 +56,7 @@ const features: Feature[] = [
 export function SettingsPanel() {
   const { toast } = useToast();
 
-  const { data: settings } = useQuery({
+  const { data: settings = {} } = useQuery({
     queryKey: ["/api/settings"],
   });
 
@@ -89,39 +89,69 @@ export function SettingsPanel() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-next gap-2">
           <Settings className="h-5 w-5" />
           Feature Settings
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-6">
-          {features.map((feature) => (
-            <div
-              key={feature.key}
-              className="flex items-center justify-between space-x-2"
-            >
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center">
-                  {feature.icon}
-                  <Label className="ml-2" htmlFor={feature.key}>
-                    {feature.name}
-                  </Label>
+        <motion.div 
+          className="space-y-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <AnimatePresence>
+            {features.map((feature) => (
+              <motion.div
+                key={feature.key}
+                className="flex items-center justify-between space-x-2"
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 20, opacity: 0 }}
+                whileHover={{ scale: 1.02 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              >
+                <div className="flex-1 space-y-1">
+                  <motion.div 
+                    className="flex items-center"
+                    whileHover={{ x: 5 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  >
+                    <motion.div
+                      whileHover={{ rotate: 360 }}
+                      transition={{ duration: 0.5 }}
+                    >
+                      {feature.icon}
+                    </motion.div>
+                    <Label className="ml-2" htmlFor={feature.key}>
+                      {feature.name}
+                    </Label>
+                  </motion.div>
+                  <motion.p 
+                    className="text-sm text-muted-foreground"
+                    initial={{ opacity: 0.6 }}
+                    whileHover={{ opacity: 1 }}
+                  >
+                    {feature.description}
+                  </motion.p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {feature.description}
-                </p>
-              </div>
-              <Switch
-                id={feature.key}
-                checked={settings?.[feature.key]?.isEnabled ?? true}
-                onCheckedChange={(enabled) =>
-                  updateSetting.mutate({ key: feature.key, enabled })
-                }
-              />
-            </div>
-          ))}
-        </div>
+                <motion.div
+                  whileTap={{ scale: 0.9 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                >
+                  <Switch
+                    id={feature.key}
+                    checked={settings[feature.key]?.isEnabled ?? true}
+                    onCheckedChange={(enabled) =>
+                      updateSetting.mutate({ key: feature.key, enabled })
+                    }
+                  />
+                </motion.div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
       </CardContent>
     </Card>
   );
