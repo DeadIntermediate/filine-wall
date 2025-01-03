@@ -15,9 +15,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Info, Flag } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Info, Flag, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { ReputationScore } from "./ReputationScore";
 
 export function CallTable() {
   const { toast } = useToast();
@@ -67,7 +75,8 @@ export function CallTable() {
           <TableHead>Time</TableHead>
           <TableHead>Action</TableHead>
           <TableHead>Status</TableHead>
-          <TableHead>Duration</TableHead>
+          <TableHead>Type</TableHead>
+          <TableHead>Score</TableHead>
           <TableHead className="text-right">Report</TableHead>
         </TableRow>
       </TableHeader>
@@ -104,7 +113,27 @@ export function CallTable() {
                 <Badge variant="outline">Not Listed</Badge>
               )}
             </TableCell>
-            <TableCell>{call.duration || "N/A"}</TableCell>
+            <TableCell>
+              <Badge variant="outline">
+                {call.metadata?.lineType || "Unknown"}
+              </Badge>
+            </TableCell>
+            <TableCell>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    View Score
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Reputation Score - {call.phoneNumber}</DialogTitle>
+                  </DialogHeader>
+                  <ReputationScore phoneNumber={call.phoneNumber} />
+                </DialogContent>
+              </Dialog>
+            </TableCell>
             <TableCell className="text-right">
               <Button
                 variant="ghost"
