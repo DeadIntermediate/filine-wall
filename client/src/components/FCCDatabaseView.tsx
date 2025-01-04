@@ -10,10 +10,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, PhoneCall, RefreshCw } from "lucide-react";
+import { AlertTriangle, PhoneCall, RefreshCw, Info } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface FCCSpamRecord {
   phoneNumber: string;
@@ -22,9 +28,15 @@ interface FCCSpamRecord {
   category: string;
 }
 
+interface DatabaseResponse {
+  records: FCCSpamRecord[];
+  lastUpdate: string | null;
+  isMockData: boolean;
+}
+
 export function FCCDatabaseView() {
   const { toast } = useToast();
-  const { data: numbers = [], isLoading } = useQuery<FCCSpamRecord[]>({
+  const { data, isLoading } = useQuery<DatabaseResponse>({
     queryKey: ["/api/fcc-database"],
   });
 
@@ -58,23 +70,39 @@ export function FCCDatabaseView() {
     return <Skeleton className="h-[400px] w-full" />;
   }
 
+  const numbers = data?.records || [];
+
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <div className="flex items-center gap-2">
-          <PhoneCall className="h-5 w-5" />
-          <CardTitle>FCC Spam Number Database</CardTitle>
+      <CardHeader className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <PhoneCall className="h-5 w-5" />
+            <CardTitle>FCC Spam Number Database</CardTitle>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refreshMutation.mutate()}
+            disabled={refreshMutation.isPending}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+            {refreshMutation.isPending ? 'Refreshing...' : 'Refresh Database'}
+          </Button>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refreshMutation.mutate()}
-          disabled={refreshMutation.isPending}
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
-          {refreshMutation.isPending ? 'Refreshing...' : 'Refresh Database'}
-        </Button>
+
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="flex items-center gap-1">
+            <Info className="h-4 w-4" />
+            {data?.isMockData ? 'Using Mock Data' : 'Production Data'}
+          </Badge>
+          {data?.lastUpdate && (
+            <Badge variant="outline">
+              Last Updated: {new Date(data.lastUpdate).toLocaleString()}
+            </Badge>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="rounded-md border">
@@ -98,7 +126,16 @@ export function FCCDatabaseView() {
                     <div className="flex items-center gap-2">
                       {entry.reportCount}
                       {entry.reportCount > 10 && (
-                        <AlertTriangle className="h-4 w-4 text-red-500" />
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <AlertTriangle className="h-4 w-4 text-red-500" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              High number of reports
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
                     </div>
                   </TableCell>

@@ -1,18 +1,19 @@
 import { db } from "@db";
 import { phoneNumbers } from "@db/schema";
 import { eq } from "drizzle-orm";
-import fetch from "node-fetch";
 
 /**
  * Service for managing spam number database.
  * Currently uses mock data for development.
  * 
- * Future API Integration Options:
- * - Truecaller API: Global spam number database
- * - Robokiller API: Specialized in robocall detection
- * - Hiya Fraud/Spam API: Real-time number reputation
- * - YouMail API: Robocall and spam detection
- * - Twilio Lookup API: Spam likelihood scoring
+ * NOTE: This is currently using MOCK DATA for development.
+ * In production, this would integrate with external APIs like:
+ * - FCC's Complaint Database API
+ * - Truecaller API
+ * - Robokiller API
+ * - Hiya Fraud/Spam API
+ * - YouMail API
+ * - Twilio Lookup API
  */
 
 interface FCCSpamRecord {
@@ -25,6 +26,7 @@ interface FCCSpamRecord {
 export class SpamDatabaseService {
   private static lastUpdate: Date | null = null;
   private static cache: Map<string, FCCSpamRecord> = new Map();
+  private static readonly MOCK_MODE = true; // Explicitly indicate we're in mock mode
 
   // Sample data for development
   private static readonly MOCK_DATA: FCCSpamRecord[] = [
@@ -62,6 +64,9 @@ export class SpamDatabaseService {
 
   static async refreshDatabase() {
     try {
+      console.log("Starting database refresh...");
+      console.log(`Mode: ${this.MOCK_MODE ? 'MOCK DATA' : 'PRODUCTION'}`);
+
       // In production, this would fetch from the FCC API
       // For now, use mock data
       const data = this.MOCK_DATA;
@@ -83,13 +88,21 @@ export class SpamDatabaseService {
               .values({
                 number: record.phoneNumber,
                 type: "blacklist",
-                description: `Auto-blocked: FCC Database (${record.category})`,
-                scoreFactors: { fccReports: record.reportCount },
+                description: `[MOCK DATA] Auto-blocked: Test Database (${record.category})`,
+                scoreFactors: { 
+                  fccReports: record.reportCount,
+                  mockData: true,
+                  lastUpdated: new Date().toISOString()
+                },
               })
               .onConflictDoUpdate({
                 target: phoneNumbers.number,
                 set: {
-                  scoreFactors: { fccReports: record.reportCount },
+                  scoreFactors: { 
+                    fccReports: record.reportCount,
+                    mockData: true,
+                    lastUpdated: new Date().toISOString()
+                  },
                 },
               });
           } catch (error) {
@@ -99,24 +112,41 @@ export class SpamDatabaseService {
       }));
 
       console.log(`Successfully refreshed spam database with ${data.length} records`);
+
+      return {
+        success: true,
+        timestamp: this.lastUpdate,
+        mode: this.MOCK_MODE ? 'MOCK' : 'PRODUCTION',
+        recordCount: data.length
+      };
     } catch (error) {
       console.error("Error refreshing spam database:", error);
-      // Don't throw the error, just log it to prevent app crash
+      throw error;
     }
   }
 
   static async checkNumber(phoneNumber: string): Promise<{ 
     isSpam: boolean;
     details?: FCCSpamRecord;
+    isMockData: boolean;
   }> {
     const record = this.cache.get(phoneNumber);
     return {
       isSpam: !!record,
       details: record,
+      isMockData: this.MOCK_MODE
     };
   }
 
-  static async getDatabaseEntries(): Promise<FCCSpamRecord[]> {
-    return Array.from(this.cache.values());
+  static async getDatabaseEntries(): Promise<{
+    records: FCCSpamRecord[];
+    lastUpdate: Date | null;
+    isMockData: boolean;
+  }> {
+    return {
+      records: Array.from(this.cache.values()),
+      lastUpdate: this.lastUpdate,
+      isMockData: this.MOCK_MODE
+    };
   }
 }
