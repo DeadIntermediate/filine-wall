@@ -682,6 +682,16 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ message: "Failed to fetch FCC database" });
     }
   });
+  app.post("/api/fcc-database/refresh", async (_req, res) => {
+    try {
+      await SpamDatabaseService.refreshDatabase();
+      const result = await SpamDatabaseService.getDatabaseEntries();
+      res.json(result);
+    } catch (error) {
+      console.error("Error refreshing FCC database:", error);
+      res.status(500).json({ message: "Failed to refresh FCC database" });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

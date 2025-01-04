@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Table,
   TableBody,
@@ -8,9 +8,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, PhoneCall } from "lucide-react";
+import { AlertTriangle, PhoneCall, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 
 interface FCCSpamRecord {
   phoneNumber: string;
@@ -20,8 +23,35 @@ interface FCCSpamRecord {
 }
 
 export function FCCDatabaseView() {
+  const { toast } = useToast();
   const { data: numbers = [], isLoading } = useQuery<FCCSpamRecord[]>({
     queryKey: ["/api/fcc-database"],
+  });
+
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/fcc-database/refresh", {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to refresh database");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/fcc-database"] });
+      toast({
+        title: "Database Refreshed",
+        description: "The spam number database has been updated.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to refresh the database. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {
@@ -30,11 +60,21 @@ export function FCCDatabaseView() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+        <div className="flex items-center gap-2">
           <PhoneCall className="h-5 w-5" />
-          FCC Spam Number Database
-        </CardTitle>
+          <CardTitle>FCC Spam Number Database</CardTitle>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => refreshMutation.mutate()}
+          disabled={refreshMutation.isPending}
+          className="flex items-center gap-2"
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+          {refreshMutation.isPending ? 'Refreshing...' : 'Refresh Database'}
+        </Button>
       </CardHeader>
       <CardContent>
         <div className="rounded-md border">
