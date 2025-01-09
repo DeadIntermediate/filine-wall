@@ -10,21 +10,38 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Shield, ChartBar, Cog } from "lucide-react";
 import { DashboardCustomizer } from "@/components/DashboardCustomizer";
 
+interface DashboardStats {
+  totalBlocked: number;
+  blacklistedCount: number;
+  todayBlocks: number;
+}
+
+interface RiskScore {
+  currentRisk: number;
+}
+
+interface Settings {
+  [key: string]: {
+    isEnabled: boolean;
+    value?: number | boolean;
+  };
+}
+
 export default function Dashboard() {
-  const { data: stats } = useQuery({
+  const { data: stats = { totalBlocked: 0, blacklistedCount: 0, todayBlocks: 0 } } = useQuery<DashboardStats>({
     queryKey: ["/api/stats"],
   });
 
-  const { data: riskScore } = useQuery({
+  const { data: riskScore = { currentRisk: 0 } } = useQuery<RiskScore>({
     queryKey: ["/api/risk-score"],
     refetchInterval: 5000, // Refresh every 5 seconds
   });
 
-  const { data: settings } = useQuery({
+  const { data: settings = {} } = useQuery<Settings>({
     queryKey: ["/api/settings"],
   });
 
-  const isFeatureEnabled = (key: string) => settings?.[key]?.isEnabled ?? true;
+  const isFeatureEnabled = (key: string) => settings[key]?.isEnabled ?? true;
 
   return (
     <div className="space-y-6">
@@ -100,10 +117,10 @@ export default function Dashboard() {
               {isFeatureEnabled('show_statistics') && (
                 <div className="grid gap-4 md:grid-cols-4">
                   {[
-                    { title: "Total Blocked", value: stats?.totalBlocked || 0 },
-                    { title: "Blacklisted Numbers", value: stats?.blacklistedCount || 0 },
-                    { title: "Today's Blocks", value: stats?.todayBlocks || 0 },
-                    { component: <RiskScoreGauge score={riskScore?.currentRisk || 0} label="Current Risk Level" /> }
+                    { title: "Total Blocked", value: stats.totalBlocked },
+                    { title: "Blacklisted Numbers", value: stats.blacklistedCount },
+                    { title: "Today's Blocks", value: stats.todayBlocks },
+                    { component: <RiskScoreGauge score={riskScore.currentRisk} label="Current Risk Level" /> }
                   ].map((item, index) => (
                     <motion.div
                       key={item.title || 'risk-gauge'}

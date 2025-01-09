@@ -29,11 +29,22 @@ import { DeviceDiagnosticTool } from "@/components/DeviceDiagnosticTool";
 const deviceSchema = z.object({
   name: z.string().min(1, "Device name is required"),
   ipAddress: z.string().min(1, "IP address is required"),
-  port: z.string().transform((val) => parseInt(val, 10)),
+  port: z.coerce.number(),
   deviceType: z.enum(["raspberry_pi", "android", "custom"]),
 });
 
 type DeviceFormData = z.infer<typeof deviceSchema>;
+
+interface Device {
+  id: string;
+  deviceId: string;
+  name: string;
+  ipAddress: string;
+  port: number;
+  deviceType: "raspberry_pi" | "android" | "custom";
+  status: "online" | "offline";
+  lastHeartbeat: string | null;
+}
 
 function formatUptime(lastHeartbeat: string | null): string {
   if (!lastHeartbeat) return "N/A";
@@ -52,7 +63,7 @@ export function DeviceConfigPanel() {
   const queryClient = useQueryClient();
   const [isAdding, setIsAdding] = useState(false);
 
-  const { data: devices } = useQuery({
+  const { data: devices = [] } = useQuery<Device[]>({
     queryKey: ["/api/devices"],
     refetchInterval: 5000, // Refresh every 5 seconds
   });
@@ -93,7 +104,7 @@ export function DeviceConfigPanel() {
     defaultValues: {
       name: "",
       ipAddress: "",
-      port: "5000",
+      port: 5000,
       deviceType: "raspberry_pi",
     },
   });
@@ -214,7 +225,7 @@ export function DeviceConfigPanel() {
         )}
 
         <div className="grid gap-4 md:grid-cols-2">
-          {devices?.map((device: any) => (
+          {devices.map((device) => (
             <motion.div
               key={device.id}
               initial={{ opacity: 0, y: 20 }}
