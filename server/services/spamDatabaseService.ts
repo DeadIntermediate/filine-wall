@@ -1,123 +1,102 @@
 import { db } from "@db";
 import { phoneNumbers } from "@db/schema";
 import { eq } from "drizzle-orm";
+import twilio from "twilio";
 
 /**
- * Service for managing spam number database.
- * Currently uses mock data for development.
- * 
- * NOTE: This is currently using MOCK DATA for development.
- * In production, this would integrate with external APIs like:
- * - FCC's Complaint Database API
- * - Truecaller API
- * - Robokiller API
- * - Hiya Fraud/Spam API
- * - YouMail API
- * - Twilio Lookup API
+ * Service for managing spam number database using Twilio Lookup API.
  */
 
-interface FCCSpamRecord {
+interface SpamRecord {
   phoneNumber: string;
   reportCount: number;
   lastReported: string;
   category: string;
+  carrier?: string;
+  type?: string;
 }
 
 export class SpamDatabaseService {
   private static lastUpdate: Date | null = null;
-  private static cache: Map<string, FCCSpamRecord> = new Map();
-  private static readonly MOCK_MODE = true; // Explicitly indicate we're in mock mode
+  private static cache: Map<string, SpamRecord> = new Map();
+  private static twilioClient: twilio.Twilio;
 
-  // Sample data for development
-  private static readonly MOCK_DATA: FCCSpamRecord[] = [
-    {
-      phoneNumber: "1-800-555-0123",
-      reportCount: 127,
-      lastReported: new Date().toISOString(),
-      category: "telemarketing"
-    },
-    {
-      phoneNumber: "1-888-555-0456",
-      reportCount: 89,
-      lastReported: new Date().toISOString(),
-      category: "robocall"
-    },
-    {
-      phoneNumber: "1-877-555-0789",
-      reportCount: 234,
-      lastReported: new Date().toISOString(),
-      category: "scam"
-    },
-    {
-      phoneNumber: "1-866-555-0147",
-      reportCount: 56,
-      lastReported: new Date().toISOString(),
-      category: "impersonator"
-    },
-    {
-      phoneNumber: "1-855-555-0258",
-      reportCount: 167,
-      lastReported: new Date().toISOString(),
-      category: "debt_collection"
+  private static initTwilioClient() {
+    if (!this.twilioClient) {
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+      if (!accountSid || !authToken) {
+        throw new Error("Twilio credentials not configured");
+      }
+
+      this.twilioClient = twilio(accountSid, authToken);
     }
-  ];
+    return this.twilioClient;
+  }
 
   static async refreshDatabase() {
     try {
-      console.log("Starting database refresh...");
-      console.log(`Mode: ${this.MOCK_MODE ? 'MOCK DATA' : 'PRODUCTION'}`);
+      console.log("Starting Twilio spam database refresh...");
 
-      // In production, this would fetch from the FCC API
-      // For now, use mock data
-      const data = this.MOCK_DATA;
-
+      // Clear existing cache
       this.cache.clear();
 
-      // Update cache
-      data.forEach(record => {
-        this.cache.set(record.phoneNumber, record);
+      // Get all numbers from our database
+      const allNumbers = await db.query.phoneNumbers.findMany();
+
+      // Initialize Twilio client
+      const client = this.initTwilioClient();
+
+      // Check each number with Twilio Lookup
+      const lookupPromises = allNumbers.map(async (entry) => {
+        try {
+          const lookupResult = await client.lookups.v2
+            .phoneNumbers(entry.number)
+            .fetch({ fields: "spam_score,line_type_intelligence" });
+
+          if (lookupResult.validNumber) {
+            const spamScore = lookupResult.spamScore || 0;
+            const record: SpamRecord = {
+              phoneNumber: entry.number,
+              reportCount: Math.floor(spamScore * 100), // Convert spam score to a count
+              lastReported: new Date().toISOString(),
+              category: spamScore > 0.7 ? "high_risk" : spamScore > 0.3 ? "medium_risk" : "low_risk",
+              carrier: lookupResult.carrier?.name,
+              type: lookupResult.lineType,
+            };
+
+            this.cache.set(entry.number, record);
+
+            // Update database entry with latest info
+            await db
+              .update(phoneNumbers)
+              .set({
+                scoreFactors: {
+                  twilioSpamScore: spamScore,
+                  carrier: lookupResult.carrier?.name,
+                  lineType: lookupResult.lineType,
+                  lastChecked: new Date().toISOString(),
+                },
+                reputationScore: 100 - (spamScore * 100), // Convert spam score to reputation
+              })
+              .where(eq(phoneNumbers.number, entry.number));
+          }
+        } catch (error) {
+          console.error(`Failed to lookup number ${entry.number}:`, error);
+        }
       });
+
+      await Promise.all(lookupPromises);
 
       this.lastUpdate = new Date();
 
-      // Update our database with spam numbers
-      await Promise.all(data.map(async record => {
-        if (record.reportCount > 5) {
-          try {
-            await db.insert(phoneNumbers)
-              .values({
-                number: record.phoneNumber,
-                type: "blacklist",
-                description: `[MOCK DATA] Auto-blocked: Test Database (${record.category})`,
-                scoreFactors: { 
-                  fccReports: record.reportCount,
-                  mockData: true,
-                  lastUpdated: new Date().toISOString()
-                },
-              })
-              .onConflictDoUpdate({
-                target: phoneNumbers.number,
-                set: {
-                  scoreFactors: { 
-                    fccReports: record.reportCount,
-                    mockData: true,
-                    lastUpdated: new Date().toISOString()
-                  },
-                },
-              });
-          } catch (error) {
-            console.error(`Failed to update database for number ${record.phoneNumber}:`, error);
-          }
-        }
-      }));
-
-      console.log(`Successfully refreshed spam database with ${data.length} records`);
+      console.log(`Successfully refreshed spam database with ${this.cache.size} records`);
 
       return {
         success: true,
         timestamp: this.lastUpdate,
-        mode: this.MOCK_MODE ? 'MOCK' : 'PRODUCTION',
-        recordCount: data.length
+        recordCount: this.cache.size
       };
     } catch (error) {
       console.error("Error refreshing spam database:", error);
@@ -127,26 +106,45 @@ export class SpamDatabaseService {
 
   static async checkNumber(phoneNumber: string): Promise<{ 
     isSpam: boolean;
-    details?: FCCSpamRecord;
-    isMockData: boolean;
+    details?: SpamRecord;
   }> {
-    const record = this.cache.get(phoneNumber);
-    return {
-      isSpam: !!record,
-      details: record,
-      isMockData: this.MOCK_MODE
-    };
+    try {
+      const client = this.initTwilioClient();
+      const lookupResult = await client.lookups.v2
+        .phoneNumbers(phoneNumber)
+        .fetch({ fields: "spam_score,line_type_intelligence" });
+
+      if (!lookupResult.validNumber) {
+        return { isSpam: true }; // Invalid numbers are considered suspicious
+      }
+
+      const spamScore = lookupResult.spamScore || 0;
+      const record: SpamRecord = {
+        phoneNumber,
+        reportCount: Math.floor(spamScore * 100),
+        lastReported: new Date().toISOString(),
+        category: spamScore > 0.7 ? "high_risk" : spamScore > 0.3 ? "medium_risk" : "low_risk",
+        carrier: lookupResult.carrier?.name,
+        type: lookupResult.lineType,
+      };
+
+      return {
+        isSpam: spamScore > 0.5,
+        details: record
+      };
+    } catch (error) {
+      console.error("Error checking number:", error);
+      throw error;
+    }
   }
 
   static async getDatabaseEntries(): Promise<{
-    records: FCCSpamRecord[];
+    records: SpamRecord[];
     lastUpdate: Date | null;
-    isMockData: boolean;
   }> {
     return {
       records: Array.from(this.cache.values()),
-      lastUpdate: this.lastUpdate,
-      isMockData: this.MOCK_MODE
+      lastUpdate: this.lastUpdate
     };
   }
 }

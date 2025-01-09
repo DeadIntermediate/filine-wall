@@ -21,17 +21,18 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-interface FCCSpamRecord {
+interface SpamRecord {
   phoneNumber: string;
   reportCount: number;
   lastReported: string;
   category: string;
+  carrier?: string;
+  type?: string;
 }
 
 interface DatabaseResponse {
-  records: FCCSpamRecord[];
+  records: SpamRecord[];
   lastUpdate: string | null;
-  isMockData: boolean;
 }
 
 export function FCCDatabaseView() {
@@ -54,7 +55,7 @@ export function FCCDatabaseView() {
       queryClient.invalidateQueries({ queryKey: ["/api/fcc-database"] });
       toast({
         title: "Database Refreshed",
-        description: "The spam number database has been updated.",
+        description: "The spam number database has been updated with the latest data from Twilio.",
       });
     },
     onError: () => {
@@ -72,13 +73,26 @@ export function FCCDatabaseView() {
 
   const numbers = data?.records || [];
 
+  const getCategoryBadge = (category: string) => {
+    switch (category) {
+      case "high_risk":
+        return <Badge variant="destructive">High Risk</Badge>;
+      case "medium_risk":
+        return <Badge variant="warning">Medium Risk</Badge>;
+      case "low_risk":
+        return <Badge variant="secondary">Low Risk</Badge>;
+      default:
+        return <Badge variant="outline">{category}</Badge>;
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <PhoneCall className="h-5 w-5" />
-            <CardTitle>FCC Spam Number Database</CardTitle>
+            <CardTitle>Spam Number Database</CardTitle>
           </div>
           <Button
             variant="outline"
@@ -95,7 +109,7 @@ export function FCCDatabaseView() {
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="flex items-center gap-1">
             <Info className="h-4 w-4" />
-            {data?.isMockData ? 'Using Mock Data' : 'Production Data'}
+            Powered by Twilio Lookup
           </Badge>
           {data?.lastUpdate && (
             <Badge variant="outline">
@@ -110,35 +124,41 @@ export function FCCDatabaseView() {
             <TableHeader>
               <TableRow>
                 <TableHead>Phone Number</TableHead>
-                <TableHead>Category</TableHead>
+                <TableHead>Risk Level</TableHead>
                 <TableHead>Report Count</TableHead>
-                <TableHead>Last Reported</TableHead>
+                <TableHead>Line Type</TableHead>
+                <TableHead>Carrier</TableHead>
+                <TableHead>Last Updated</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {numbers.map((entry) => (
                 <TableRow key={entry.phoneNumber}>
                   <TableCell>{entry.phoneNumber}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{entry.category}</Badge>
-                  </TableCell>
+                  <TableCell>{getCategoryBadge(entry.category)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       {entry.reportCount}
-                      {entry.reportCount > 10 && (
+                      {entry.reportCount > 70 && (
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger>
                               <AlertTriangle className="h-4 w-4 text-red-500" />
                             </TooltipTrigger>
                             <TooltipContent>
-                              High number of reports
+                              High spam score detected
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       )}
                     </div>
                   </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {entry.type || "Unknown"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{entry.carrier || "Unknown"}</TableCell>
                   <TableCell>
                     {new Date(entry.lastReported).toLocaleDateString()}
                   </TableCell>
