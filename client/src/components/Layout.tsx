@@ -16,7 +16,7 @@ const navigation: NavigationItem[] = [
   { name: "Dashboard", href: "/", icon: Shield },
   { name: "Number Management", href: "/numbers", icon: Phone },
   { name: "Call History", href: "/history", icon: ClipboardList },
-  { name: "FCC Database", href: "/fcc-database", icon: Database },
+  { name: "Spam Database", href: "/fcc-database", icon: Database },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 

@@ -19,25 +19,31 @@ interface SpamRecord {
 export class SpamDatabaseService {
   private static lastUpdate: Date | null = null;
   private static cache: Map<string, SpamRecord> = new Map();
-  private static twilioClient: twilio.Twilio;
+  private static twilioClient: twilio.Twilio | null = null;
 
-  private static initTwilioClient() {
-    if (!this.twilioClient) {
-      const accountSid = process.env.TWILIO_ACCOUNT_SID;
-      const authToken = process.env.TWILIO_AUTH_TOKEN;
+  private static initTwilioClient(): twilio.Twilio | null {
+    if (this.twilioClient) return this.twilioClient;
 
-      if (!accountSid || !authToken) {
-        throw new Error("Twilio credentials not configured");
-      }
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
 
-      this.twilioClient = twilio(accountSid, authToken);
+    if (!accountSid || !authToken) {
+      console.warn("Twilio credentials not configured - spam detection will use local database only");
+      return null;
     }
-    return this.twilioClient;
+
+    try {
+      this.twilioClient = twilio(accountSid, authToken);
+      return this.twilioClient;
+    } catch (error) {
+      console.error("Failed to initialize Twilio client:", error);
+      return null;
+    }
   }
 
   static async refreshDatabase() {
     try {
-      console.log("Starting Twilio spam database refresh...");
+      console.log("Starting spam database refresh...");
 
       // Clear existing cache
       this.cache.clear();
@@ -45,25 +51,30 @@ export class SpamDatabaseService {
       // Get all numbers from our database
       const allNumbers = await db.query.phoneNumbers.findMany();
 
-      // Initialize Twilio client
+      // Initialize Twilio client - continue even if it fails
       const client = this.initTwilioClient();
 
-      // Check each number with Twilio Lookup
+      // Process each number
       const lookupPromises = allNumbers.map(async (entry) => {
         try {
-          const lookupResult = await client.lookups.v2
-            .phoneNumbers(entry.number)
-            .fetch({ fields: "spam_score,line_type_intelligence" });
+          // If Twilio is available, get additional data
+          if (client) {
+            const lookupResult = await client.lookups.v2
+              .phoneNumbers(entry.number)
+              .fetch();
 
-          if (lookupResult.validNumber) {
-            const spamScore = lookupResult.spamScore || 0;
+            // Safe access to Twilio response properties
+            const spamScore = (lookupResult as any).spamScore || 0;
+            const carrier = (lookupResult as any).carrier?.name || 'Unknown';
+            const lineType = (lookupResult as any).lineType || 'Unknown';
+
             const record: SpamRecord = {
               phoneNumber: entry.number,
-              reportCount: Math.floor(spamScore * 100), // Convert spam score to a count
+              reportCount: Math.floor(spamScore * 100),
               lastReported: new Date().toISOString(),
               category: spamScore > 0.7 ? "high_risk" : spamScore > 0.3 ? "medium_risk" : "low_risk",
-              carrier: lookupResult.carrier?.name,
-              type: lookupResult.lineType,
+              carrier,
+              type: lineType,
             };
 
             this.cache.set(entry.number, record);
@@ -74,16 +85,37 @@ export class SpamDatabaseService {
               .set({
                 scoreFactors: {
                   twilioSpamScore: spamScore,
-                  carrier: lookupResult.carrier?.name,
-                  lineType: lookupResult.lineType,
+                  carrier,
+                  lineType,
                   lastChecked: new Date().toISOString(),
                 },
-                reputationScore: 100 - (spamScore * 100), // Convert spam score to reputation
+                reputationScore: String(100 - (spamScore * 100)), // Convert to string for compatibility
               })
               .where(eq(phoneNumbers.number, entry.number));
+          } else {
+            // Fallback to basic record without Twilio data
+            const record: SpamRecord = {
+              phoneNumber: entry.number,
+              reportCount: entry.reputationScore ? 100 - parseInt(entry.reputationScore) : 0,
+              lastReported: new Date().toISOString(),
+              category: entry.type === 'blacklist' ? 'high_risk' : 'low_risk',
+              carrier: 'Unknown',
+              type: 'Unknown'
+            };
+
+            this.cache.set(entry.number, record);
           }
         } catch (error) {
-          console.error(`Failed to lookup number ${entry.number}:`, error);
+          console.error(`Failed to process number ${entry.number}:`, error);
+          // Add basic record even if lookup fails
+          this.cache.set(entry.number, {
+            phoneNumber: entry.number,
+            reportCount: 0,
+            lastReported: new Date().toISOString(),
+            category: 'unknown',
+            carrier: 'Unknown',
+            type: 'Unknown'
+          });
         }
       });
 
@@ -96,7 +128,8 @@ export class SpamDatabaseService {
       return {
         success: true,
         timestamp: this.lastUpdate,
-        recordCount: this.cache.size
+        recordCount: this.cache.size,
+        twilioEnabled: !!this.twilioClient
       };
     } catch (error) {
       console.error("Error refreshing spam database:", error);
@@ -110,28 +143,51 @@ export class SpamDatabaseService {
   }> {
     try {
       const client = this.initTwilioClient();
-      const lookupResult = await client.lookups.v2
-        .phoneNumbers(phoneNumber)
-        .fetch({ fields: "spam_score,line_type_intelligence" });
 
-      if (!lookupResult.validNumber) {
-        return { isSpam: true }; // Invalid numbers are considered suspicious
+      if (client) {
+        // If Twilio is available, use it for checking
+        const lookupResult = await client.lookups.v2
+          .phoneNumbers(phoneNumber)
+          .fetch();
+
+        const spamScore = (lookupResult as any).spamScore || 0;
+        const record: SpamRecord = {
+          phoneNumber,
+          reportCount: Math.floor(spamScore * 100),
+          lastReported: new Date().toISOString(),
+          category: spamScore > 0.7 ? "high_risk" : spamScore > 0.3 ? "medium_risk" : "low_risk",
+          carrier: (lookupResult as any).carrier?.name || 'Unknown',
+          type: (lookupResult as any).lineType || 'Unknown',
+        };
+
+        return {
+          isSpam: spamScore > 0.5,
+          details: record
+        };
+      } else {
+        // Fallback to database check
+        const number = await db.query.phoneNumbers.findFirst({
+          where: eq(phoneNumbers.number, phoneNumber),
+        });
+
+        if (!number) {
+          return { isSpam: false };
+        }
+
+        const record: SpamRecord = {
+          phoneNumber,
+          reportCount: number.reputationScore ? 100 - parseInt(number.reputationScore) : 0,
+          lastReported: new Date().toISOString(),
+          category: number.type === 'blacklist' ? 'high_risk' : 'low_risk',
+          carrier: 'Unknown',
+          type: 'Unknown'
+        };
+
+        return {
+          isSpam: number.type === 'blacklist',
+          details: record
+        };
       }
-
-      const spamScore = lookupResult.spamScore || 0;
-      const record: SpamRecord = {
-        phoneNumber,
-        reportCount: Math.floor(spamScore * 100),
-        lastReported: new Date().toISOString(),
-        category: spamScore > 0.7 ? "high_risk" : spamScore > 0.3 ? "medium_risk" : "low_risk",
-        carrier: lookupResult.carrier?.name,
-        type: lookupResult.lineType,
-      };
-
-      return {
-        isSpam: spamScore > 0.5,
-        details: record
-      };
     } catch (error) {
       console.error("Error checking number:", error);
       throw error;
