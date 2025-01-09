@@ -14,25 +14,37 @@ const changelog: ChangelogEntry[] = [
     version: "1.0.0-Alpha",
     date: "2025-01-09",
     type: "added",
-    description: "Initial alpha release with core spam protection features"
+    description: "Initial alpha release with core spam protection features including phone number management, call screening, and reputation scoring systems."
   },
   {
     version: "1.0.0-Alpha",
     date: "2025-01-09",
     type: "added",
-    description: "AI-powered voice tone analysis for spam detection"
+    description: "AI-powered voice tone analysis for spam detection with real-time pattern recognition and voice feature extraction"
   },
   {
     version: "1.0.0-Alpha",
     date: "2025-01-09",
     type: "added",
-    description: "Flexible date range analytics for call trends"
+    description: "Flexible date range analytics for call trends with custom start and end date selection"
   },
   {
     version: "1.0.0-Alpha",
     date: "2025-01-09",
     type: "changed",
-    description: "Renamed FCC Database label to Spam Database"
+    description: "Renamed FCC Database to Spam Database for better clarity on the data source and purpose"
+  },
+  {
+    version: "1.0.0-Alpha",
+    date: "2025-01-09",
+    type: "added",
+    description: "Enhanced voice pattern analysis with machine learning capabilities for better spam detection"
+  },
+  {
+    version: "1.0.0-Alpha",
+    date: "2025-01-09",
+    type: "added",
+    description: "Real-time risk scoring system with automated call blocking based on reputation scores"
   }
 ];
 
