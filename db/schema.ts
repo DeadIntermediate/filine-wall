@@ -1,6 +1,38 @@
 import { pgTable, text, serial, timestamp, boolean, jsonb, decimal, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 
+// User Management Tables
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  role: text("role").notNull().default('user'), // 'admin' or 'user'
+  email: text("email").unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastLogin: timestamp("last_login"),
+  active: boolean("active").default(true),
+  preferences: jsonb("preferences"),
+});
+
+export const sessions = pgTable("sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  token: text("token").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  lastActivity: timestamp("last_activity"),
+  deviceInfo: jsonb("device_info"),
+});
+
+export const accessControl = pgTable("access_control", {
+  id: serial("id").primaryKey(),
+  role: text("role").notNull(),
+  resource: text("resource").notNull(),
+  permissions: jsonb("permissions").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const phoneNumbers = pgTable("phone_numbers", {
   id: serial("id").primaryKey(),
   number: text("number").notNull().unique(), // Added unique constraint
@@ -167,6 +199,12 @@ export const insertUserPreferencesSchema = createInsertSchema(userPreferences);
 export const selectUserPreferencesSchema = createSelectSchema(userPreferences);
 export const insertBlockingRuleSchema = createInsertSchema(blockingRules);
 export const selectBlockingRuleSchema = createSelectSchema(blockingRules);
+export const insertUserSchema = createInsertSchema(users);
+export const selectUserSchema = createSelectSchema(users);
+export const insertSessionSchema = createInsertSchema(sessions);
+export const selectSessionSchema = createSelectSchema(sessions);
+export const insertAccessControlSchema = createInsertSchema(accessControl);
+export const selectAccessControlSchema = createSelectSchema(accessControl);
 
 export type PhoneNumber = typeof phoneNumbers.$inferSelect;
 export type InsertPhoneNumber = typeof phoneNumbers.$inferInsert;
@@ -190,3 +228,9 @@ export type UserPreferences = typeof userPreferences.$inferSelect;
 export type InsertUserPreferences = typeof userPreferences.$inferInsert;
 export type BlockingRule = typeof blockingRules.$inferSelect;
 export type InsertBlockingRule = typeof blockingRules.$inferInsert;
+export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+export type Session = typeof sessions.$inferSelect;
+export type InsertSession = typeof sessions.$inferInsert;
+export type AccessControl = typeof accessControl.$inferSelect;
+export type InsertAccessControl = typeof accessControl.$inferInsert;

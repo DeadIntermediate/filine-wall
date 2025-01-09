@@ -1,5 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { authenticate, requireAdmin } from "./middleware/auth";
+import { AuthService } from "./services/authService";
 import { db } from "@db";
 import { desc, eq, sql } from "drizzle-orm";
 import { phoneNumbers, callLogs, spamReports, voicePatterns, featureSettings, deviceConfigurations } from "@db/schema";
@@ -11,37 +13,32 @@ import { SpamDatabaseService } from "./services/spamDatabaseService";
 import { analyzeVoice, type VoiceAnalysisResult } from "./services/voiceAnalysisService";
 
 export function registerRoutes(app: Express): Server {
-  // Get all phone numbers
-  app.get("/api/numbers", async (req, res) => {
-    const numbers = await db.query.phoneNumbers.findMany({
-      orderBy: desc(phoneNumbers.createdAt),
-    });
-    res.json(numbers);
+  // Auth routes (public)
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      const result = await AuthService.login(username, password);
+      res.json(result);
+    } catch (error) {
+      res.status(401).json({ message: error.message });
+    }
   });
 
-  // Add new phone number
-  app.post("/api/numbers", async (req, res) => {
-    const { number, type, description } = req.body;
-    const result = await db
-      .insert(phoneNumbers)
-      .values({
-        number,
-        type,
-        description,
-      })
-      .returning();
-    res.json(result[0]);
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { username, password, role } = req.body;
+      const user = await AuthService.createUser(username, password, role);
+      res.json({ ...user, password: undefined });
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
   });
 
-  // Delete phone number
-  app.delete("/api/numbers/:id", async (req, res) => {
-    const { id } = req.params;
-    await db.delete(phoneNumbers).where(eq(phoneNumbers.id, parseInt(id)));
-    res.json({ success: true });
-  });
+  // Protected routes - Master Interface (admin only)
+  app.use("/api/admin/*", authenticate, requireAdmin);
 
-  // Get statistics
-  app.get("/api/stats", async (req, res) => {
+  // Move existing admin routes under /api/admin
+  app.get("/api/admin/stats", async (req, res) => {
     const [totalBlocked] = await db
       .select({ count: sql<number>`count(*)` })
       .from(callLogs)
@@ -67,8 +64,26 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Get all call logs
-  app.get("/api/calls", async (req, res) => {
+  app.get("/api/admin/settings", async (req, res) => {
+    const settings = await db.query.featureSettings.findMany();
+
+    // Transform into a key-value object
+    const settingsMap = settings.reduce((acc, setting) => ({
+      ...acc,
+      [setting.featureKey]: {
+        isEnabled: setting.isEnabled,
+        configuration: setting.configuration
+      }
+    }), {});
+
+    res.json(settingsMap);
+  });
+
+
+  // Protected routes - User Interface (authenticated users)
+  app.use("/api/user/*", authenticate);
+
+  app.get("/api/user/calls", async (req, res) => {
     const logs = await db.query.callLogs.findMany({
       orderBy: desc(callLogs.timestamp),
       limit: 100,
@@ -76,8 +91,44 @@ export function registerRoutes(app: Express): Server {
     res.json(logs);
   });
 
-  // Get daily statistics with dynamic date range
-  app.get("/api/stats/daily", async (req, res) => {
+  app.get("/api/user/numbers", async (req, res) => {
+    const numbers = await db.query.phoneNumbers.findMany({
+      orderBy: desc(phoneNumbers.createdAt),
+    });
+    res.json(numbers);
+  });
+
+  // Get all phone numbers (moved to /api/admin)
+  app.get("/api/admin/numbers", async (req, res) => {
+    const numbers = await db.query.phoneNumbers.findMany({
+      orderBy: desc(phoneNumbers.createdAt),
+    });
+    res.json(numbers);
+  });
+
+  // Add new phone number (moved to /api/admin)
+  app.post("/api/admin/numbers", async (req, res) => {
+    const { number, type, description } = req.body;
+    const result = await db
+      .insert(phoneNumbers)
+      .values({
+        number,
+        type,
+        description,
+      })
+      .returning();
+    res.json(result[0]);
+  });
+
+  // Delete phone number (moved to /api/admin)
+  app.delete("/api/admin/numbers/:id", async (req, res) => {
+    const { id } = req.params;
+    await db.delete(phoneNumbers).where(eq(phoneNumbers.id, parseInt(id)));
+    res.json({ success: true });
+  });
+
+  // Get daily statistics with dynamic date range (moved to /api/admin)
+  app.get("/api/admin/stats/daily", async (req, res) => {
     try {
       const start_date = req.query.start_date as string;
       const end_date = req.query.end_date as string;
@@ -135,8 +186,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get calls heatmap data
-  app.get("/api/calls/heatmap", async (req, res) => {
+  // Get calls heatmap data (moved to /api/admin)
+  app.get("/api/admin/calls/heatmap", async (req, res) => {
     const timeRange = parseInt(req.query.range as string) || 24; // Default to last 24 hours
     const startTime = new Date();
     startTime.setHours(startTime.getHours() - timeRange);
@@ -162,8 +213,8 @@ export function registerRoutes(app: Express): Server {
     res.json(locations);
   });
 
-  // Get all spam reports
-  app.get("/api/reports", async (req, res) => {
+  // Get all spam reports (moved to /api/admin)
+  app.get("/api/admin/reports", async (req, res) => {
     const reports = await db
       .select()
       .from(spamReports)
@@ -171,8 +222,8 @@ export function registerRoutes(app: Express): Server {
     res.json(reports);
   });
 
-  // Submit new spam report
-  app.post("/api/reports", async (req, res) => {
+  // Submit new spam report (moved to /api/admin)
+  app.post("/api/admin/reports", async (req, res) => {
     const { phoneNumber, category, description } = req.body;
 
     // Check if report already exists
@@ -209,8 +260,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Submit new spam report from call history
-  app.post("/api/spam-reports", async (req, res) => {
+  // Submit new spam report from call history (moved to /api/admin)
+  app.post("/api/admin/spam-reports", async (req, res) => {
     const { phoneNumber, category, description } = req.body;
 
     try {
@@ -276,8 +327,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Confirm existing report
-  app.post("/api/reports/:id/confirm", async (req, res) => {
+  // Confirm existing report (moved to /api/admin)
+  app.post("/api/admin/reports/:id/confirm", async (req, res) => {
     const { id } = req.params;
 
     const [updated] = await db
@@ -313,8 +364,8 @@ export function registerRoutes(app: Express): Server {
     res.json(updated);
   });
 
-  // Get reputation score for a phone number
-  app.get("/api/numbers/:number/reputation", async (req, res) => {
+  // Get reputation score for a phone number (moved to /api/admin)
+  app.get("/api/admin/numbers/:number/reputation", async (req, res) => {
     const { number } = req.params;
 
     try {
@@ -326,8 +377,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Update reputation score (recalculate)
-  app.post("/api/numbers/:number/reputation/refresh", async (req, res) => {
+  // Update reputation score (recalculate) (moved to /api/admin)
+  app.post("/api/admin/numbers/:number/reputation/refresh", async (req, res) => {
     const { number } = req.params;
 
     try {
@@ -339,8 +390,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Screen call with device information and encryption
-  app.post("/api/devices/:deviceId/screen", async (req, res) => {
+  // Screen call with device information and encryption (moved to /api/admin)
+  app.post("/api/admin/devices/:deviceId/screen", async (req, res) => {
     const { deviceId } = req.params;
     const { data: encryptedData } = req.body;
     const authToken = req.headers.authorization?.split(' ')[1];
@@ -374,16 +425,16 @@ export function registerRoutes(app: Express): Server {
   });
 
 
-  // Get all devices
-  app.get("/api/devices", async (req, res) => {
+  // Get all devices (moved to /api/admin)
+  app.get("/api/admin/devices", async (req, res) => {
     const devices = await db.query.deviceConfigurations.findMany({
       orderBy: desc(deviceConfigurations.updatedAt),
     });
     res.json(devices);
   });
 
-  // Add new device
-  app.post("/api/devices", async (req, res) => {
+  // Add new device (moved to /api/admin)
+  app.post("/api/admin/devices", async (req, res) => {
     const { name, ipAddress, port, deviceType } = req.body;
 
     // Generate a unique device ID and auth token
@@ -406,8 +457,8 @@ export function registerRoutes(app: Express): Server {
     res.json(device);
   });
 
-  // Device heartbeat endpoint with encryption
-  app.post("/api/devices/:deviceId/heartbeat", async (req, res) => {
+  // Device heartbeat endpoint with encryption (moved to /api/admin)
+  app.post("/api/admin/devices/:deviceId/heartbeat", async (req, res) => {
     const { deviceId } = req.params;
     const { data: encryptedData } = req.body;
     const authToken = req.headers.authorization?.split(' ')[1];
@@ -438,8 +489,8 @@ export function registerRoutes(app: Express): Server {
     res.json({ data: JSON.stringify(updated) });
   });
 
-  // Get verification status
-  app.get("/api/verify/:phoneNumber/status", async (req, res) => {
+  // Get verification status (moved to /api/admin)
+  app.get("/api/admin/verify/:phoneNumber/status", async (req, res) => {
     const { phoneNumber } = req.params;
 
     const [number] = await db
@@ -453,8 +504,8 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Get real-time risk score
-  app.get("/api/risk-score", async (req, res) => {
+  // Get real-time risk score (moved to /api/admin)
+  app.get("/api/admin/risk-score", async (req, res) => {
     const [recentCalls] = await db
       .select({
         total: sql<number>`count(*)`,
@@ -489,48 +540,8 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Get feature settings
-  app.get("/api/settings", async (req, res) => {
-    const settings = await db.query.featureSettings.findMany();
-
-    // Transform into a key-value object
-    const settingsMap = settings.reduce((acc, setting) => ({
-      ...acc,
-      [setting.featureKey]: {
-        isEnabled: setting.isEnabled,
-        configuration: setting.configuration
-      }
-    }), {});
-
-    res.json(settingsMap);
-  });
-
-  // Update feature setting
-  app.post("/api/settings", async (req, res) => {
-    const { key, enabled, configuration } = req.body;
-
-    const [setting] = await db
-      .insert(featureSettings)
-      .values({
-        featureKey: key,
-        isEnabled: enabled,
-        configuration,
-      })
-      .onConflictDoUpdate({
-        target: featureSettings.featureKey,
-        set: {
-          isEnabled: enabled,
-          configuration,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-
-    res.json(setting);
-  });
-
-  // Get time distribution statistics
-  app.get("/api/stats/time-distribution", async (req, res) => {
+  // Get time distribution statistics (moved to /api/admin)
+  app.get("/api/admin/stats/time-distribution", async (req, res) => {
     const timeDistribution = await db
       .select({
         hour: callLogs.timeOfDay,
@@ -553,8 +564,8 @@ export function registerRoutes(app: Express): Server {
     res.json(timeDistribution);
   });
 
-  // Verify caller identity
-  app.post("/api/verify", async (req, res) => {
+  // Verify caller identity (moved to /api/admin)
+  app.post("/api/admin/verify", async (req, res) => {
     const { phoneNumber, code } = req.body;
 
     if (!phoneNumber || !code) {
@@ -578,8 +589,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Device diagnostic endpoint
-  app.post("/api/devices/:deviceId/diagnostic", async (req, res) => {
+  // Device diagnostic endpoint (moved to /api/admin)
+  app.post("/api/admin/devices/:deviceId/diagnostic", async (req, res) => {
     const { deviceId } = req.params;
     const authToken = req.headers.authorization?.split(' ')[1];
 
@@ -649,8 +660,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // GitHub Repository Setup
-  app.post("/api/github/create-repo", async (req, res) => {
+  // GitHub Repository Setup (moved to /api/admin)
+  app.post("/api/admin/github/create-repo", async (req, res) => {
     const { repoName, description, token } = req.body;
 
     try {
