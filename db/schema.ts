@@ -116,6 +116,35 @@ export const deviceConfigurations = pgTable("device_configurations", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const userPreferences = pgTable("user_preferences", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  quietHoursStart: integer("quiet_hours_start"),
+  quietHoursEnd: integer("quiet_hours_end"),
+  riskThreshold: decimal("risk_threshold", { precision: 5, scale: 2 }).default('0.7'),
+  blockCategories: jsonb("block_categories"), // Array of categories to block
+  allowKnownCallers: boolean("allow_known_callers").default(true),
+  blockInternational: boolean("block_international").default(false),
+  blockUnknown: boolean("block_unknown").default(false),
+  blockWithoutCallerId: boolean("block_without_caller_id").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const blockingRules = pgTable("blocking_rules", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  ruleType: text("rule_type").notNull(), // time, category, location, pattern
+  isEnabled: boolean("is_enabled").default(true),
+  priority: integer("priority").default(0),
+  conditions: jsonb("conditions").notNull(), // Time ranges, categories, etc.
+  action: text("action").notNull(), // block, allow, challenge
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const insertPhoneNumberSchema = createInsertSchema(phoneNumbers);
 export const selectPhoneNumberSchema = createSelectSchema(phoneNumbers);
 export const insertCallLogSchema = createInsertSchema(callLogs);
@@ -134,6 +163,10 @@ export const insertFeatureSettingSchema = createInsertSchema(featureSettings);
 export const selectFeatureSettingSchema = createSelectSchema(featureSettings);
 export const insertDeviceConfigurationSchema = createInsertSchema(deviceConfigurations);
 export const selectDeviceConfigurationSchema = createSelectSchema(deviceConfigurations);
+export const insertUserPreferencesSchema = createInsertSchema(userPreferences);
+export const selectUserPreferencesSchema = createSelectSchema(userPreferences);
+export const insertBlockingRuleSchema = createInsertSchema(blockingRules);
+export const selectBlockingRuleSchema = createSelectSchema(blockingRules);
 
 export type PhoneNumber = typeof phoneNumbers.$inferSelect;
 export type InsertPhoneNumber = typeof phoneNumbers.$inferInsert;
@@ -153,3 +186,7 @@ export type FeatureSetting = typeof featureSettings.$inferSelect;
 export type InsertFeatureSetting = typeof featureSettings.$inferInsert;
 export type DeviceConfiguration = typeof deviceConfigurations.$inferSelect;
 export type InsertDeviceConfiguration = typeof deviceConfigurations.$inferInsert;
+export type UserPreferences = typeof userPreferences.$inferSelect;
+export type InsertUserPreferences = typeof userPreferences.$inferInsert;
+export type BlockingRule = typeof blockingRules.$inferSelect;
+export type InsertBlockingRule = typeof blockingRules.$inferInsert;
