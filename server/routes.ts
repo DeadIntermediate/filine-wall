@@ -78,23 +78,61 @@ export function registerRoutes(app: Express): Server {
 
   // Get daily statistics with dynamic date range
   app.get("/api/stats/daily", async (req, res) => {
-    const days = parseInt(req.query.days as string) || 7;
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+    try {
+      const start_date = req.query.start_date as string;
+      const end_date = req.query.end_date as string;
+      let startDate: Date;
+      let endDate: Date;
 
-    const stats = await db
-      .select({
-        date: sql<string>`DATE(${callLogs.timestamp})`,
-        blocked: sql<number>`count(*) filter (where ${callLogs.action} = 'blocked')`,
-        allowed: sql<number>`count(*) filter (where ${callLogs.action} = 'allowed')`,
-      })
-      .from(callLogs)
-      .where(sql`${callLogs.timestamp} >= ${startDate} AND ${callLogs.timestamp} <= ${endDate}`)
-      .groupBy(sql`DATE(${callLogs.timestamp})`)
-      .orderBy(sql`DATE(${callLogs.timestamp})`);
+      // If no dates provided, default to last 7 days
+      if (!start_date || !end_date) {
+        endDate = new Date();
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - 7);
+      } else {
+        // Validate date format
+        startDate = new Date(start_date);
+        endDate = new Date(end_date);
 
-    res.json({ daily: stats });
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          return res.status(400).json({
+            message: "Invalid date format. Please use YYYY-MM-DD format."
+          });
+        }
+
+        // Ensure end date is not before start date
+        if (endDate < startDate) {
+          return res.status(400).json({
+            message: "End date cannot be before start date."
+          });
+        }
+      }
+
+      const stats = await db
+        .select({
+          date: sql<string>`DATE(${callLogs.timestamp})`,
+          blocked: sql<number>`count(*) filter (where ${callLogs.action} = 'blocked')`,
+          allowed: sql<number>`count(*) filter (where ${callLogs.action} = 'allowed')`,
+        })
+        .from(callLogs)
+        .where(sql`${callLogs.timestamp} >= ${startDate} AND ${callLogs.timestamp} <= ${endDate}`)
+        .groupBy(sql`DATE(${callLogs.timestamp})`)
+        .orderBy(sql`DATE(${callLogs.timestamp})`);
+
+      res.json({ 
+        daily: stats,
+        dateRange: {
+          start: startDate.toISOString().split('T')[0],
+          end: endDate.toISOString().split('T')[0]
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching daily statistics:', error);
+      res.status(500).json({ 
+        message: "Error fetching daily statistics",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
   });
 
   // Get calls heatmap data
