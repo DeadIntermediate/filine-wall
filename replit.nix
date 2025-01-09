@@ -1,5 +1,7 @@
 {pkgs}: {
   deps = [
+    pkgs.ffmpeg
+    pkgs.libsndfile
     pkgs.xsimd
     pkgs.pkg-config
     pkgs.libxcrypt

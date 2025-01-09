@@ -2,12 +2,13 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
 import { desc, eq, sql } from "drizzle-orm";
-import { phoneNumbers, callLogs, spamReports, featureSettings, deviceConfigurations } from "@db/schema";
+import { phoneNumbers, callLogs, spamReports, voicePatterns, featureSettings, deviceConfigurations } from "@db/schema";
 import { screenCall, logCall } from "./services/callScreening";
 import { calculateReputationScore } from "./services/reputationScoring";
 import { verifyCode, getVerificationAttempts } from "./services/callerVerification";
 import { randomBytes } from "crypto";
-import { SpamDatabaseService } from "./services/spamDatabaseService"; 
+import { SpamDatabaseService } from "./services/spamDatabaseService";
+import { analyzeVoice, type VoiceAnalysisResult } from "./services/voiceAnalysisService";
 
 export function registerRoutes(app: Express): Server {
   // Get all phone numbers
@@ -690,6 +691,93 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Error refreshing FCC database:", error);
       res.status(500).json({ message: "Failed to refresh FCC database" });
+    }
+  });
+
+  // Voice Analysis Endpoint
+  app.post("/api/voice/analyze", async (req, res) => {
+    try {
+      const { audioData, sampleRate } = req.body;
+
+      if (!audioData || !sampleRate) {
+        return res.status(400).json({
+          message: "Audio data and sample rate are required"
+        });
+      }
+
+      const analysis = await analyzeVoice(new Float32Array(audioData), sampleRate);
+
+      // Store voice pattern if confidence is high
+      if (analysis.confidence > 0.8) {
+        await db
+          .insert(voicePatterns)
+          .values({
+            patternType: analysis.isSpam ? 'spam' : 'legitimate',
+            features: analysis.patterns,
+            confidence: analysis.confidence,
+            metadata: {
+              detectedFeatures: analysis.features,
+              audioCharacteristics: {
+                energy: analysis.patterns.energy,
+                zeroCrossings: analysis.patterns.zeroCrossings,
+                rhythmRegularity: analysis.patterns.rhythmRegularity
+              }
+            }
+          });
+      }
+
+      res.json(analysis);
+    } catch (error) {
+      console.error('Voice analysis error:', error);
+      res.status(500).json({
+        message: "Error analyzing voice",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Get Voice Analysis Statistics
+  app.get("/api/voice/stats", async (req, res) => {
+    try {
+      const [stats] = await db
+        .select({
+          total: sql<number>`count(*)`,
+          spam: sql<number>`count(*) filter (where pattern_type = 'spam')`,
+          legitimate: sql<number>`count(*) filter (where pattern_type = 'legitimate')`,
+          avgConfidence: sql<number>`avg(confidence)`
+        })
+        .from(voicePatterns)
+        .where(sql`created_at >= NOW() - INTERVAL '7 days'`);
+
+      // Get patterns with high confidence
+      const commonPatterns = await db
+        .select({
+          patternType: voicePatterns.patternType,
+          count: sql<number>`count(*)`,
+          avgConfidence: sql<number>`avg(confidence)`
+        })
+        .from(voicePatterns)
+        .where(sql`confidence > 0.8`)
+        .groupBy(voicePatterns.patternType)
+        .orderBy(sql`count(*) desc`)
+        .limit(5);
+
+      res.json({
+        weeklyStats: {
+          total: Number(stats.total) || 0,
+          spamCalls: Number(stats.spam) || 0,
+          legitimateCalls: Number(stats.legitimate) || 0,
+          averageConfidence: Number(stats.avgConfidence) || 0
+        },
+        commonPatterns: commonPatterns.map(pattern => ({
+          type: pattern.patternType,
+          count: Number(pattern.count),
+          confidence: Number(pattern.avgConfidence)
+        }))
+      });
+    } catch (error) {
+      console.error('Error fetching voice analysis stats:', error);
+      res.status(500).json({ message: "Error fetching voice analysis statistics" });
     }
   });
 

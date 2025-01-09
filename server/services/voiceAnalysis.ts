@@ -1,52 +1,19 @@
 import { spawn } from "child_process";
 import { voicePatternLearner } from "./voicePatternLearning";
-import { detectScamPhrases } from "./scamPhraseDetection";
 
 interface VoiceAnalysisResult {
   isRobot: boolean;
   confidence: number;
   features: string[];
-  language?: {
-    detected: string;
-    confidence: number;
-  };
   patterns?: {
     repetition?: number;
     naturalness?: number;
     pitch?: number;
-    languageSpecific?: {
-      knownPhrases?: boolean;
-      dialectMatch?: boolean;
-    };
-    mfcc?: number[];
-    spectralCentroid?: number;
-    spectralRolloff?: number;
-    spectralBandwidth?: number;
-    zeroCrossings?: number;
     energy?: number;
-    pitchVariance?: number;
-    tempo?: number;
-    beatStrength?: number;
-    learned?: {
-      matchedType: string;
-      confidence: number;
-    };
+    zeroCrossings?: number;
     pausePatterns?: number[];
     responseLatency?: number[];
     intonationVariance?: number;
-
-  };
-  scamDetection?: {
-    isScam: boolean;
-    confidence: number;
-    detectedPhrases: string[];
-    category?: string;
-    aiVoiceIndicators?: {
-      clonedVoicePatterns: boolean;
-      artificialPauses: boolean;
-      scriptedResponses: boolean;
-      confidence: number;
-    };
   };
 }
 
@@ -54,162 +21,110 @@ const VOICE_ANALYSIS_SCRIPT = `
 import sys
 import json
 import numpy as np
-import librosa
-import sounddevice as sd
 from scipy import signal
-from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
-from langdetect import detect, detect_langs
-from torch import nn
-import torch
-
-# Load pre-trained speech recognition model
-model_name = "facebook/wav2vec2-large-xlsr-53"
-processor = Wav2Vec2Processor.from_pretrained(model_name)
-model = Wav2Vec2ForCTC.from_pretrained(model_name)
-
-def detect_language(text):
-    try:
-        # Get language probabilities
-        langs = detect_langs(text)
-        primary_lang = langs[0]
-        return {
-            'detected': primary_lang.lang,
-            'confidence': primary_lang.prob
-        }
-    except:
-        return None
 
 def analyze_voice_stream(audio_data, sample_rate):
     # Convert audio data to numpy array
     y = np.array(audio_data)
 
-    # Extract features
-    # 1. Pitch detection
-    pitches, magnitudes = librosa.piptrack(y=y, sr=sample_rate)
-    pitch_mean = np.mean(pitches[magnitudes > np.max(magnitudes)/2])
+    # Calculate basic features
+    # 1. Zero crossings (measure of frequency content)
+    zero_crossings = np.sum(np.abs(np.diff(np.signbit(y))))
 
-    # 2. Speech rate detection (using zero crossings)
-    zero_crossings = librosa.zero_crossings(y)
-    speech_rate = sum(zero_crossings)
+    # 2. Energy features
+    energy = np.sum(y**2) / len(y)
+    rms = np.sqrt(np.mean(y**2))
 
-    # 3. Repetition detection
-    mfccs = librosa.feature.mfcc(y=y, sr=sample_rate, n_mfcc=13)
-    repetition_score = np.mean(np.std(mfccs, axis=1))
+    # 3. Pitch estimation using autocorrelation
+    f0_min = 50  # Minimum pitch in Hz
+    f0_max = 500  # Maximum pitch in Hz
 
-    # 4. Spectral features
-    spec_cent = librosa.feature.spectral_centroid(y=y, sr=sample_rate)
-    spec_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sample_rate)
-    spec_bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sample_rate)
+    corr = signal.correlate(y, y)
+    lags = signal.correlation_lags(len(y), len(y))
+    valid_lags = np.where((lags >= sample_rate/f0_max) & (lags <= sample_rate/f0_min))[0]
 
-    # 5. Speech-to-text for language detection
-    try:
-        inputs = processor(y, sampling_rate=sample_rate, return_tensors="pt", padding=True)
-        with torch.no_grad():
-            logits = model(inputs.input_values).logits
-        predicted_ids = torch.argmax(logits, dim=-1)
-        transcription = processor.batch_decode(predicted_ids)[0]
+    if len(valid_lags) > 0:
+        pitch_idx = valid_lags[np.argmax(corr[valid_lags])]
+        pitch = sample_rate / pitch_idx if pitch_idx > 0 else 0
+        pitch_confidence = np.max(corr[valid_lags]) / corr[len(y)-1]
+    else:
+        pitch = 0
+        pitch_confidence = 0
 
-        # Detect language from transcription
-        lang_info = detect_language(transcription)
-    except Exception as e:
-        print(f"Language detection error: {str(e)}", file=sys.stderr)
-        lang_info = None
+    # 4. Rhythm and pause analysis
+    # Split signal into frames
+    frame_length = int(0.025 * sample_rate)  # 25ms frames
+    hop_length = int(0.010 * sample_rate)    # 10ms hop
 
-    # Calculate naturalness score
-    naturalness = calculate_naturalness(mfccs, spec_cent, spec_rolloff)
+    frames = []
+    for i in range(0, len(y)-frame_length, hop_length):
+        frames.append(y[i:i+frame_length])
 
-    # Language-specific pattern analysis
-    language_patterns = analyze_language_patterns(y, sample_rate, lang_info['detected'] if lang_info else None)
+    frames = np.array(frames)
+    frame_energy = np.sum(frames**2, axis=1)
 
-    # Determine if it's a robot based on features
-    is_robot = (
-        repetition_score < 0.5 or  # High repetition
-        naturalness < 0.4 or       # Unnatural speech
-        speech_rate > 3.0 or       # Too fast/regular
-        language_patterns.get('suspicious', False)  # Suspicious language patterns
-    )
-
-    # Add pause pattern analysis
-    onset_env = librosa.onset.onset_strength(y=y, sr=sample_rate)
-    tempo, beats = librosa.beat.beat_track(onset_envelope=onset_env, sr=sample_rate)
+    # Detect pauses (low energy regions)
+    energy_threshold = 0.1 * np.max(frame_energy)
+    is_pause = frame_energy < energy_threshold
 
     # Calculate pause patterns
-    pause_patterns = []
-    for i in range(1, len(beats)):
-        pause_patterns.append(beats[i] - beats[i-1])
+    pause_lengths = []
+    current_pause = 0
 
-    # Calculate response latency patterns (time between speech segments)
+    for is_p in is_pause:
+        if is_p:
+            current_pause += 1
+        elif current_pause > 0:
+            pause_lengths.append(current_pause * hop_length / sample_rate)
+            current_pause = 0
+
+    if current_pause > 0:
+        pause_lengths.append(current_pause * hop_length / sample_rate)
+
+    # Calculate response latency (time between high energy regions)
     response_latency = []
-    mse = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
-    speech_segments = librosa.effects.split(y, top_db=20)
-    for i in range(1, len(speech_segments)):
-        response_latency.append((speech_segments[i][0] - speech_segments[i-1][1]) / sample_rate)
+    last_active = None
 
+    for i, is_p in enumerate(is_pause):
+        if not is_p:
+            if last_active is not None and i - last_active > 1:
+                response_latency.append((i - last_active) * hop_length / sample_rate)
+            last_active = i
+
+    # Calculate rhythm regularity
+    if len(pause_lengths) > 1:
+        rhythm_regularity = 1 - np.std(pause_lengths) / np.mean(pause_lengths)
+    else:
+        rhythm_regularity = 1.0
+
+    # Determine if it's likely a robot based on features
+    is_robot = (
+        rhythm_regularity > 0.8 or                # Too regular rhythm
+        (pitch > 0 and pitch_confidence > 0.8) or # Too stable pitch
+        len(np.unique(pause_lengths)) < 3         # Too few unique pause patterns
+    )
+
+    confidence = min(1.0, max(0.0,
+        0.3 * rhythm_regularity +
+        0.3 * (pitch_confidence if pitch > 0 else 0) +
+        0.4 * (1 - len(np.unique(pause_lengths)) / max(len(pause_lengths), 1))
+    ))
 
     return {
         'is_robot': bool(is_robot),
-        'confidence': float(max(0.6, 1 - naturalness)),
-        'language': lang_info,
+        'confidence': float(confidence),
         'patterns': {
-            'repetition': float(repetition_score),
-            'naturalness': float(naturalness),
-            'pitch': float(pitch_mean) if not np.isnan(pitch_mean) else 0.0,
-            'languageSpecific': language_patterns,
-            'mfcc': mfccs.tolist(),
-            'spectralCentroid': np.mean(spec_cent).tolist(),
-            'spectralRolloff': np.mean(spec_rolloff).tolist(),
-            'spectralBandwidth': np.mean(spec_bandwidth).tolist(),
-            'zeroCrossings': speech_rate,
-            'energy': np.mean(librosa.feature.rms(y=y, frame_length=2048, hop_length=512)).tolist(),
-            'pitchVariance': np.var(pitches[magnitudes > np.max(magnitudes)/2]).tolist(),
-            'pausePatterns': pause_patterns,
-            'responseLatency': response_latency,
-            'intonationVariance': float(np.var(pitches[magnitudes > np.max(magnitudes)/2]))
+            'pitch': float(pitch),
+            'pitchConfidence': float(pitch_confidence),
+            'energy': float(energy),
+            'zeroCrossings': int(zero_crossings),
+            'rhythmRegularity': float(rhythm_regularity),
+            'pausePatterns': [float(x) for x in pause_lengths],
+            'responseLatency': [float(x) for x in response_latency],
         }
     }
 
-def calculate_naturalness(mfccs, spec_cent, spec_rolloff):
-    # Combined score based on multiple features
-    mfcc_var = np.mean(np.var(mfccs, axis=1))
-    cent_var = np.var(spec_cent)
-    rolloff_var = np.var(spec_rolloff)
-
-    # Normalize and combine scores
-    naturalness = (
-        0.4 * min(1.0, mfcc_var / 2.0) +
-        0.3 * min(1.0, cent_var / 1000.0) +
-        0.3 * min(1.0, rolloff_var / 1000.0)
-    )
-
-    return float(naturalness)
-
-def analyze_language_patterns(audio, sample_rate, detected_language):
-    # Common spam phrases in different languages
-    spam_phrases = {
-        'en': ['warranty', 'credit card', 'prize', 'won', 'free'],
-        'es': ['premio', 'gratis', 'ganado', 'tarjeta'],
-        'zh': ['优惠', '免费', '中奖', '推销'],
-        'hi': ['मुफ्त', 'इनाम', 'जीता', 'कार्ड'],
-        # Add more languages and phrases
-    }
-
-    # Analyze dialect consistency
-    dialect_match = True  # Implement proper dialect analysis
-
-    # Check for known spam phrases in detected language
-    known_phrases = False
-    if detected_language and detected_language in spam_phrases:
-        # Implementation would check transcribed text against spam phrases
-        known_phrases = False  # Placeholder
-
-    return {
-        'knownPhrases': known_phrases,
-        'dialectMatch': dialect_match,
-        'suspicious': known_phrases or not dialect_match
-    }
-
 if __name__ == '__main__':
-    # Read input from Node.js
     input_data = json.loads(sys.stdin.read())
     result = analyze_voice_stream(
         input_data['audio_data'],
@@ -252,109 +167,71 @@ export async function analyzeVoiceStream(audioData: number[], sampleRate: number
 
     const analysis = JSON.parse(result);
 
-    // Extract features for pattern learning
-    const features = {
-      mfcc: analysis.patterns.mfcc || [],
-      spectral: {
-        centroid: analysis.patterns.spectralCentroid || 0,
-        rolloff: analysis.patterns.spectralRolloff || 0,
-        bandwidth: analysis.patterns.spectralBandwidth || 0
-      },
-      temporal: {
-        zeroCrossings: analysis.patterns.zeroCrossings || 0,
-        energy: analysis.patterns.energy || 0
-      },
-      pitch: {
-        mean: analysis.patterns.pitch || 0,
-        variance: analysis.patterns.pitchVariance || 0
-      },
-      rhythm: {
-        tempo: analysis.patterns.tempo || 0,
-        beatStrength: analysis.patterns.beatStrength || 0
-      },
-      pausePatterns: analysis.patterns.pausePatterns || [],
-      responseLatency: analysis.patterns.responseLatency || [],
-      intonationVariance: analysis.patterns.intonationVariance || 0,
-    };
-
-    // Match against learned patterns
-    const patternMatch = await voicePatternLearner.matchPattern(
-      features,
-      analysis.language?.detected
-    );
+    // Generate feature descriptions
+    const features = generateFeatureDescriptions(analysis.patterns);
 
     // Learn from this pattern if confidence is high
     if (analysis.confidence > 0.8) {
       await voicePatternLearner.learnFromPattern(
-        features,
-        analysis.is_robot ? 'robot' : 'legitimate',
-        analysis.language?.detected
-      );
-    }
-
-    // Perform scam phrase detection if we have transcribed text
-    let scamDetection;
-    if (analysis.language && analysis.language.detected) {
-      scamDetection = await detectScamPhrases(
-        analysis.language.detected,
-        analysis.language?.detected || 'en',
         {
-          pausePatterns: analysis.patterns.pausePatterns || [],
-          responseLatency: analysis.patterns.responseLatency || [],
-          intonationVariance: analysis.patterns.intonationVariance || 0
-        }
+          mfcc: [], // We'll add this back when we have librosa
+          spectral: {
+            centroid: 0,
+            rolloff: 0,
+            bandwidth: 0
+          },
+          temporal: {
+            zeroCrossings: analysis.patterns.zeroCrossings,
+            energy: analysis.patterns.energy
+          },
+          pitch: {
+            mean: analysis.patterns.pitch,
+            variance: 0
+          },
+          rhythm: {
+            tempo: analysis.patterns.rhythmRegularity * 120, // Approximate tempo
+            beatStrength: analysis.patterns.energy
+          }
+        },
+        analysis.is_robot ? 'robot' : 'legitimate'
       );
     }
-
-    // Combine ML analysis with learned patterns
-    const isRobot = analysis.is_robot || (patternMatch.type === 'robot' && patternMatch.confidence > 0.7);
-    const confidence = Math.max(analysis.confidence, patternMatch.confidence);
 
     return {
-      isRobot,
-      confidence,
-      features: generateFeatureDescriptions(analysis.patterns, analysis.language),
-      language: analysis.language,
-      patterns: {
-        ...analysis.patterns,
-        learned: {
-          matchedType: patternMatch.type,
-          confidence: patternMatch.confidence
-        }
-      },
-      scamDetection
+      isRobot: analysis.is_robot,
+      confidence: analysis.confidence,
+      features,
+      patterns: analysis.patterns
     };
+
   } catch (error) {
     console.error('Voice analysis failed:', error);
     return fallbackAnalysis();
   }
 }
 
-function generateFeatureDescriptions(patterns: any, language: any): string[] {
+function generateFeatureDescriptions(patterns: any): string[] {
   const features: string[] = [];
 
-  if (patterns.repetition < 0.5) {
-    features.push('High speech pattern repetition detected');
+  if (patterns.rhythmRegularity > 0.8) {
+    features.push('Highly regular speech rhythm detected');
   }
 
-  if (patterns.naturalness < 0.4) {
-    features.push('Unnatural speech patterns detected');
+  if (patterns.pitchConfidence > 0.8) {
+    features.push('Unusually stable pitch patterns detected');
   }
 
-  if (patterns.pitch > 0 && (patterns.pitch < 50 || patterns.pitch > 300)) {
-    features.push('Unusual pitch characteristics');
-  }
-
-  if (language) {
-    features.push(`Detected language: ${language.detected} (${Math.round(language.confidence * 100)}% confidence)`);
-  }
-
-  if (patterns.languageSpecific) {
-    if (patterns.languageSpecific.knownPhrases) {
-      features.push('Known spam phrases detected in the speech');
+  if (patterns.pausePatterns && patterns.pausePatterns.length > 0) {
+    const uniquePauses = new Set(patterns.pausePatterns.map((p: number) => Math.round(p * 100) / 100));
+    if (uniquePauses.size < 3) {
+      features.push('Limited variation in pause patterns');
     }
-    if (!patterns.languageSpecific.dialectMatch) {
-      features.push('Inconsistent dialect patterns detected');
+  }
+
+  if (patterns.responseLatency && patterns.responseLatency.length > 0) {
+    const avgLatency = patterns.responseLatency.reduce((a: number, b: number) => a + b, 0) / patterns.responseLatency.length;
+    if (avgLatency < 0.2) {
+      features.push('Unusually quick response times');
     }
   }
 
@@ -369,7 +246,9 @@ function fallbackAnalysis(): VoiceAnalysisResult {
     patterns: {
       repetition: 0.5,
       naturalness: 0.5,
-      pitch: 0
+      pitch: 0,
+      energy: 0,
+      zeroCrossings: 0
     }
   };
 }
