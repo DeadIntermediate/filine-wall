@@ -27,11 +27,28 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { ReputationScore } from "./ReputationScore";
 
-export function CallTable() {
+interface Call {
+  id: number;
+  phoneNumber: string;
+  timestamp: string;
+  action: "blocked" | "allowed";
+  duration?: string;
+  metadata: {
+    dncStatus?: {
+      registrationDate: string;
+    };
+    lineType?: string;
+    risk?: number;
+    isReported?: boolean;
+  };
+}
+
+interface CallTableProps {
+  calls: Call[];
+}
+
+export function CallTable({ calls }: CallTableProps) {
   const { toast } = useToast();
-  const { data: calls = [] } = useQuery({
-    queryKey: ["/api/calls"],
-  });
 
   const reportSpam = useMutation({
     mutationFn: async (phoneNumber: string) => {
@@ -81,7 +98,7 @@ export function CallTable() {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {calls.map((call: any) => (
+        {calls.map((call) => (
           <TableRow key={call.id}>
             <TableCell>{call.phoneNumber}</TableCell>
             <TableCell>

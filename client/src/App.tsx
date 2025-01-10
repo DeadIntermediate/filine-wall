@@ -1,20 +1,13 @@
 import { Switch, Route, useLocation } from "wouter";
-import Dashboard from "@/pages/Dashboard";
-import NumberManagement from "@/pages/NumberManagement";
-import CallHistory from "@/pages/CallHistory";
-import Settings from "@/pages/Settings";
-import VerifyCaller from "@/pages/VerifyCaller";
-import { Layout } from "@/components/Layout";
 import { ThemeProvider } from "@/components/ui/theme-provider";
-import { FCCDatabaseView } from "@/components/FCCDatabaseView";
-import { Changelog } from "@/components/Changelog";
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
-
-// New imports for auth
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { useAuth } from "@/hooks/useAuth";
+import MasterInterface from "@/pages/MasterInterface";
+import DeviceInterface from "@/pages/DeviceInterface";
+import VerifyCaller from "@/pages/VerifyCaller";
+import { Layout } from "@/components/Layout";
 
 function App() {
   const { user, isLoading } = useAuth();
@@ -37,39 +30,28 @@ function App() {
         {/* Public routes */}
         <Route path="/auth/login" component={LoginPage} />
 
-        {/* User Interface Routes */}
-        <Route path="/verify">
-          <VerifyCaller />
-        </Route>
-
         {/* Protected routes */}
         <Route>
           <Layout>
             <Switch>
-              {/* Admin/Master Interface Routes */}
+              {/* Master Interface (Admin) */}
               {user?.role === 'admin' && (
                 <Switch>
-                  <Route path="/" component={Dashboard} />
-                  <Route path="/numbers" component={NumberManagement} />
-                  <Route path="/history" component={CallHistory} />
-                  <Route path="/settings" component={Settings} />
-                  <Route path="/fcc-database" component={FCCDatabaseView} />
-                  <Route path="/changelog" component={Changelog} />
+                  <Route path="/" component={MasterInterface} />
+                  <Route path="/verify" component={VerifyCaller} />
                 </Switch>
               )}
 
-              {/* User Interface Routes */}
+              {/* Device Interface (Regular Users) */}
               {user?.role === 'user' && (
                 <Switch>
-                  <Route path="/" component={CallHistory} />
+                  <Route path="/" component={DeviceInterface} />
                   <Route path="/verify" component={VerifyCaller} />
                 </Switch>
               )}
 
               {/* Fallback 404 */}
-              <Route>
-                <NotFound />
-              </Route>
+              <Route component={NotFound} />
             </Switch>
           </Layout>
         </Route>
