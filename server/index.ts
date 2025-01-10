@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeScheduledTasks } from "./services/scheduledTasks";
 import { SpamDatabaseService } from "./services/spamDatabaseService";
+import { SpamDetectionService } from "./services/spamDetectionService";
 
 const app = express();
 app.use(express.json());
@@ -47,6 +48,18 @@ app.use((req, res, next) => {
         // Continue even if FCC database fails - it's not critical for core functionality
       });
 
+    // Initialize spam detection model
+    await SpamDetectionService.loadModel()
+      .catch(error => {
+        console.error("Failed to initialize spam detection model:", error);
+        // Continue without AI model, will use traditional methods
+      });
+
+    // Start the initial model training in the background
+    SpamDetectionService.trainModel().catch(error => {
+      console.error("Initial model training failed:", error);
+    });
+
     const server = registerRoutes(app);
 
     // Initialize scheduled tasks (including FCC database updates)
@@ -74,6 +87,7 @@ app.use((req, res, next) => {
     const PORT = 5000;
     server.listen(PORT, "0.0.0.0", () => {
       log(`serving on port ${PORT}`);
+      log("AI Spam Detection: Initialized and ready");
     });
   } catch (error) {
     console.error("Failed to start server:", error);

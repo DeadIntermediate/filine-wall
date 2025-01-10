@@ -16,7 +16,7 @@ apt-get upgrade -y
 echo "Installing required packages..."
 apt-get install -y python3 python3-pip python3-venv python3-dev libffi-dev build-essential \
     usb-modeswitch usb-modeswitch-data ppp wvdial picocom minicom \
-    modemmanager libqmi-utils udev
+    modemmanager libqmi-utils udev portaudio19-dev jq
 
 # Create service user
 echo "Creating service user..."
@@ -34,7 +34,8 @@ chmod 700 /etc/call-detector  # Only owner can access
 
 # Install Python dependencies
 echo "Installing Python packages..."
-python3 -m pip install requests cryptography pyserial
+python3 -m pip install requests cryptography pyserial tensorflow numpy pandas scikit-learn \
+    pyaudio wave librosa meyda-python
 
 # Setup udev rules for USB modems
 echo "Setting up USB modem rules..."
@@ -50,11 +51,6 @@ EOL
 udevadm control --reload-rules
 udevadm trigger
 
-# Copy files
-echo "Installing service files..."
-cp call_detector.py encryption.py /usr/local/bin/
-chmod +x /usr/local/bin/call_detector.py
-
 # Create wvdial configuration
 echo "Configuring modem settings..."
 cat > /etc/wvdial.conf << EOL
@@ -66,44 +62,108 @@ Modem = /dev/ttyUSB-modem
 Baud = 57600
 EOL
 
-# Create systemd service file
+# Create systemd service file with dependencies
 cat > /etc/systemd/system/call-detector.service << EOL
 [Unit]
-Description=Call Detector Service
+Description=Call Detector Service with AI Spam Detection
 After=network.target ModemManager.service
+Wants=network.target ModemManager.service
 
 [Service]
 Type=simple
 User=calldetector
+Environment=TF_CPP_MIN_LOG_LEVEL=2
 ExecStart=/usr/bin/python3 /usr/local/bin/call_detector.py
 Restart=always
 RestartSec=10
+StandardOutput=append:/var/log/call-detector/service.log
+StandardError=append:/var/log/call-detector/error.log
+
+# Security hardening
+PrivateTmp=true
+ProtectSystem=full
+NoNewPrivileges=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
 
 [Install]
 WantedBy=multi-user.target
 EOL
 
+# Register device with master server
+echo "Registering device with master server..."
+MASTER_SERVER_URL="http://your-master-server"
+REGISTRATION_RESPONSE=$(curl -s -X POST "${MASTER_SERVER_URL}/api/devices/register" \
+  -H "Content-Type: application/json" \
+  -d "{\"deviceName\": \"$(hostname)\", \"deviceType\": \"call_detector\", \"publicKey\": \"$(openssl rand -base64 32)\"}")
+
+# Extract credentials from response
+DEVICE_ID=$(echo $REGISTRATION_RESPONSE | jq -r '.deviceId')
+AUTH_TOKEN=$(echo $REGISTRATION_RESPONSE | jq -r '.authToken')
+ENCRYPTION_KEY=$(echo $REGISTRATION_RESPONSE | jq -r '.encryptionKey')
+
+if [ -z "$DEVICE_ID" ] || [ -z "$AUTH_TOKEN" ] || [ -z "$ENCRYPTION_KEY" ]; then
+    echo "Error: Failed to register device with master server"
+    exit 1
+fi
+
 # Create default config file with secure permissions
 cat > /etc/call-detector/config.ini << EOL
 [server]
-url = http://your-web-interface-url
+url = ${MASTER_SERVER_URL}
+heartbeat_interval = 30
 
 [device]
-id = your-device-id
-auth_token = your-auth-token
+id = ${DEVICE_ID}
+auth_token = ${AUTH_TOKEN}
+encryption_key = ${ENCRYPTION_KEY}
 
 [modem]
 device = /dev/ttyUSB-modem
 baud_rate = 57600
 init_string = ATZ
 caller_id_format = CLIP
+
+[spam_detection]
+enabled = true
+ai_model_path = /etc/call-detector/models/spam_model.h5
+confidence_threshold = 0.85
+feature_extraction = meyda
+
+[voice_analysis]
+enabled = true
+sample_rate = 44100
+frame_size = 2048
+features = energy,zcr,spectralCentroid,mfcc
+model_path = /etc/call-detector/models/voice_model.h5
+
+[logging]
+level = INFO
+max_size = 10485760
+backup_count = 5
 EOL
 
 # Set proper permissions
 chown -R calldetector:calldetector /etc/call-detector
 chmod 600 /etc/call-detector/config.ini  # Only owner can read/write config
 
-# Enable modem-related services
+# Create log rotation configuration
+cat > /etc/logrotate.d/call-detector << EOL
+/var/log/call-detector/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 640 calldetector calldetector
+}
+EOL
+
+# Enable and start services
 echo "Enabling modem services..."
 systemctl enable ModemManager
 systemctl start ModemManager
@@ -115,8 +175,7 @@ systemctl enable call-detector
 systemctl start call-detector
 
 echo "Installation complete!"
-echo "Please edit /etc/call-detector/config.ini with your device credentials from the web interface."
-echo "Then restart the service with: systemctl restart call-detector"
+echo "Please verify the device registration in the master interface."
 
 # Test modem connection
 echo "Testing modem connection..."
@@ -133,4 +192,36 @@ if [ -e "/dev/ttyUSB-modem" ]; then
     fi
 else
     echo "Warning: Modem device not found. Please check if modem is connected"
+fi
+
+# Download AI models
+echo "Setting up AI models..."
+mkdir -p /etc/call-detector/models
+if [ ! -f "/etc/call-detector/models/spam_model.h5" ]; then
+    echo "Warning: Spam detection model not found. Please download from the master server."
+fi
+if [ ! -f "/etc/call-detector/models/voice_model.h5" ]; then
+    echo "Warning: Voice analysis model not found. Please download from the master server."
+fi
+
+# Print status summary
+echo "Installation Status:"
+echo "==================="
+systemctl status call-detector --no-pager
+echo "==================="
+echo "Check logs with: journalctl -u call-detector -f"
+echo "Configuration file: /etc/call-detector/config.ini"
+echo "Log files: /var/log/call-detector/"
+
+# Verify device registration
+echo "Verifying device registration..."
+VERIFICATION_RESPONSE=$(curl -s -X GET "${MASTER_SERVER_URL}/api/devices/${DEVICE_ID}/status" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}")
+
+DEVICE_STATUS=$(echo $VERIFICATION_RESPONSE | jq -r '.status')
+if [ "$DEVICE_STATUS" == "active" ]; then
+    echo "Device successfully registered and active"
+else
+    echo "Warning: Device registration status: ${DEVICE_STATUS}"
+    echo "Please check the master interface for more details"
 fi

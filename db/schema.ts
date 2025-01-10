@@ -148,6 +148,20 @@ export const deviceConfigurations = pgTable("device_configurations", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const deviceRegistrations = pgTable("device_registrations", {
+  id: serial("id").primaryKey(),
+  deviceId: text("device_id").notNull().unique(),
+  name: text("name").notNull(),
+  deviceType: text("device_type").notNull(),
+  publicKey: text("public_key").notNull(),
+  authToken: text("auth_token").notNull(),
+  encryptionKey: text("encryption_key").notNull(),
+  status: text("status").notNull().default('pending'),
+  registeredAt: timestamp("registered_at").defaultNow().notNull(),
+  lastActive: timestamp("last_active"),
+  metadata: jsonb("metadata"),
+});
+
 export const userPreferences = pgTable("user_preferences", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),
@@ -206,6 +220,8 @@ export const selectSessionSchema = createSelectSchema(sessions);
 export const insertAccessControlSchema = createInsertSchema(accessControl);
 export const selectAccessControlSchema = createSelectSchema(accessControl);
 
+export const insertDeviceRegistrationSchema = createInsertSchema(deviceRegistrations);
+export const selectDeviceRegistrationSchema = createSelectSchema(deviceRegistrations);
 export type PhoneNumber = typeof phoneNumbers.$inferSelect;
 export type InsertPhoneNumber = typeof phoneNumbers.$inferInsert;
 export type CallLog = typeof callLogs.$inferSelect;
@@ -234,3 +250,5 @@ export type Session = typeof sessions.$inferSelect;
 export type InsertSession = typeof sessions.$inferInsert;
 export type AccessControl = typeof accessControl.$inferSelect;
 export type InsertAccessControl = typeof accessControl.$inferInsert;
+export type DeviceRegistration = typeof deviceRegistrations.$inferSelect;
+export type InsertDeviceRegistration = typeof deviceRegistrations.$inferInsert;

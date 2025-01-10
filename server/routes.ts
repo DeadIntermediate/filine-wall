@@ -4,11 +4,11 @@ import { authenticate, requireAdmin } from "./middleware/auth";
 import { AuthService } from "./services/authService";
 import { db } from "@db";
 import { desc, eq, sql } from "drizzle-orm";
-import { phoneNumbers, callLogs, spamReports, voicePatterns, featureSettings, deviceConfigurations } from "@db/schema";
+import { phoneNumbers, callLogs, spamReports, voicePatterns, featureSettings, deviceConfigurations, deviceRegistrations } from "@db/schema";
 import { screenCall, logCall } from "./services/callScreening";
 import { calculateReputationScore } from "./services/reputationScoring";
 import { verifyCode, getVerificationAttempts } from "./services/callerVerification";
-import { randomBytes } from "crypto";
+import { randomBytes, createHash } from "crypto";
 import { SpamDatabaseService } from "./services/spamDatabaseService";
 import { analyzeVoice, type VoiceAnalysisResult } from "./services/voiceAnalysisService";
 
@@ -170,7 +170,7 @@ export function registerRoutes(app: Express): Server {
         .groupBy(sql`DATE(${callLogs.timestamp})`)
         .orderBy(sql`DATE(${callLogs.timestamp})`);
 
-      res.json({ 
+      res.json({
         daily: stats,
         dateRange: {
           start: startDate.toISOString().split('T')[0],
@@ -179,7 +179,7 @@ export function registerRoutes(app: Express): Server {
       });
     } catch (error) {
       console.error('Error fetching daily statistics:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Error fetching daily statistics",
         error: error instanceof Error ? error.message : 'Unknown error'
       });
@@ -827,6 +827,47 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('Error fetching voice analysis stats:', error);
       res.status(500).json({ message: "Error fetching voice analysis statistics" });
+    }
+  });
+
+  // Device Registration and Authentication
+  app.post("/api/devices/register", async (req, res) => {
+    try {
+      const { deviceName, deviceType, publicKey } = req.body;
+
+      // Generate unique device credentials
+      const deviceId = `device_${randomBytes(8).toString('hex')}`;
+      const authToken = randomBytes(32).toString('hex');
+      const encryptionKey = randomBytes(32).toString('hex');
+
+      // Create device registration
+      const [device] = await db
+        .insert(deviceRegistrations)
+        .values({
+          deviceId,
+          name: deviceName,
+          deviceType,
+          publicKey,
+          authToken: createHash('sha256').update(authToken).digest('hex'),
+          encryptionKey: createHash('sha256').update(encryptionKey).digest('hex'),
+          status: 'pending',
+          metadata: {
+            registrationDate: new Date().toISOString(),
+            lastConfigUpdate: new Date().toISOString()
+          }
+        })
+        .returning();
+
+      // Return credentials securely
+      res.json({
+        deviceId,
+        authToken,
+        encryptionKey,
+        serverPublicKey: process.env.SERVER_PUBLIC_KEY // Will be used for secure communication
+      });
+    } catch (error) {
+      console.error("Device registration error:", error);
+      res.status(500).json({ message: "Failed to register device" });
     }
   });
 
