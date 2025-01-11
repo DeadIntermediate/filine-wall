@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "./dist",
+    "rootDir": "..",
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["server/*"],
+      "@db/*": ["db/*"]
+    }
+  },
+  "include": ["./**/*", "../server/**/*", "../db/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

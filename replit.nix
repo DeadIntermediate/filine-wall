@@ -1,5 +1,10 @@
 {pkgs}: {
   deps = [
+    pkgs.modemmanager
+    pkgs.ppp
+    pkgs.minicom
+    pkgs.picocom
+    pkgs.usbutils
     pkgs.ffmpeg
     pkgs.libsndfile
     pkgs.xsimd

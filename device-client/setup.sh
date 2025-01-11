@@ -9,71 +9,64 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-echo "Updating system packages..."
+echo "Installing Node.js and required packages..."
 apt-get update
-apt-get upgrade -y
-
-echo "Installing required packages..."
-apt-get install -y python3 python3-pip python3-venv python3-dev libffi-dev build-essential \
-    usb-modeswitch usb-modeswitch-data ppp wvdial picocom minicom \
+apt-get install -y nodejs npm udev \
+    usb-modeswitch usb-modeswitch-data ppp \
     modemmanager libqmi-utils udev portaudio19-dev jq
 
-# Create service user
-echo "Creating service user..."
-useradd -r -s /bin/false calldetector || true
+# Install Node.js dependencies
+npm install -g typescript ts-node @tensorflow/tfjs-node serialport
 
-# Add user to dialout group for modem access
+# Create service user
+useradd -r -s /bin/false calldetector || true
 usermod -a -G dialout calldetector
 
-# Create necessary directories with secure permissions
-echo "Setting up directories..."
-mkdir -p /etc/call-detector
-mkdir -p /var/log/call-detector
+# Create directories
+mkdir -p /etc/call-detector /var/log/call-detector
 chown calldetector:calldetector /var/log/call-detector
-chmod 700 /etc/call-detector  # Only owner can access
+chmod 700 /etc/call-detector
 
-# Install Python dependencies
-echo "Installing Python packages..."
-python3 -m pip install requests cryptography pyserial tensorflow numpy pandas scikit-learn \
-    pyaudio wave librosa meyda-python
-
-# Setup udev rules for USB modems
-echo "Setting up USB modem rules..."
-cat > /etc/udev/rules.d/99-usb-serial.rules << EOL
-# USRobotics 5637
-SUBSYSTEM=="tty", ATTRS{idVendor}=="0baf", ATTRS{idProduct}=="0303", SYMLINK+="ttyUSB-modem"
-# Generic USB modem rules
-SUBSYSTEM=="tty", ATTRS{interface}=="USB 2.0 Fax Modem", SYMLINK+="ttyUSB-modem"
-KERNEL=="ttyUSB[0-9]*", ATTRS{interface}=="Modem", SYMLINK+="ttyUSB-modem"
+# USRobotics 5637 udev rules
+cat > /etc/udev/rules.d/99-usrobotics-modem.rules << EOL
+# USRobotics 5637 USB Fax Modem
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0baf", ATTRS{idProduct}=="0303", SYMLINK+="ttyUSB-modem", MODE="0660", GROUP="dialout"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", SYMLINK+="ttyUSB-modem", MODE="0660", GROUP="dialout"
 EOL
 
-# Reload udev rules
+# Reload udev
 udevadm control --reload-rules
 udevadm trigger
 
-# Create wvdial configuration
-echo "Configuring modem settings..."
-cat > /etc/wvdial.conf << EOL
-[Dialer Defaults]
-Init1 = ATZ
-Init2 = ATQ0 V1 E1 S0=0 &C1 &D2 +FCLASS=0
-Modem Type = USB Modem
-Modem = /dev/ttyUSB-modem
-Baud = 57600
+# Modem initialization script
+cat > /etc/call-detector/init-modem.sh << EOL
+#!/bin/bash
+stty -F /dev/ttyUSB-modem 115200
+echo "ATZ" > /dev/ttyUSB-modem
+sleep 1
+echo "AT&F" > /dev/ttyUSB-modem
+sleep 1
+echo "AT+VCID=1" > /dev/ttyUSB-modem
+sleep 1
+echo "AT&K3" > /dev/ttyUSB-modem
+sleep 1
+echo "AT&W" > /dev/ttyUSB-modem
 EOL
+chmod +x /etc/call-detector/init-modem.sh
 
-# Create systemd service file with dependencies
+# Systemd service
 cat > /etc/systemd/system/call-detector.service << EOL
 [Unit]
-Description=Call Detector Service with AI Spam Detection
+Description=Call Detector Service with USRobotics 5637
 After=network.target ModemManager.service
-Wants=network.target ModemManager.service
+Wants=ModemManager.service
 
 [Service]
 Type=simple
 User=calldetector
-Environment=TF_CPP_MIN_LOG_LEVEL=2
-ExecStart=/usr/bin/python3 /usr/local/bin/call_detector.py
+Environment=NODE_ENV=production
+ExecStartPre=/etc/call-detector/init-modem.sh
+ExecStart=/usr/bin/node /usr/local/bin/call_detector.js
 Restart=always
 RestartSec=10
 StandardOutput=append:/var/log/call-detector/service.log
@@ -93,33 +86,43 @@ RestrictNamespaces=true
 WantedBy=multi-user.target
 EOL
 
-# Register device with master server
-echo "Registering device with master server..."
-MASTER_SERVER_URL="http://your-master-server"
-REGISTRATION_RESPONSE=$(curl -s -X POST "${MASTER_SERVER_URL}/api/devices/register" \
-  -H "Content-Type: application/json" \
-  -d "{\"deviceName\": \"$(hostname)\", \"deviceType\": \"call_detector\", \"publicKey\": \"$(openssl rand -base64 32)\"}")
+# Enable services
+systemctl daemon-reload
+systemctl enable ModemManager
+systemctl start ModemManager
+systemctl enable call-detector
+systemctl start call-detector
 
-# Extract credentials from response
-DEVICE_ID=$(echo $REGISTRATION_RESPONSE | jq -r '.deviceId')
-AUTH_TOKEN=$(echo $REGISTRATION_RESPONSE | jq -r '.authToken')
-ENCRYPTION_KEY=$(echo $REGISTRATION_RESPONSE | jq -r '.encryptionKey')
-
-if [ -z "$DEVICE_ID" ] || [ -z "$AUTH_TOKEN" ] || [ -z "$ENCRYPTION_KEY" ]; then
-    echo "Error: Failed to register device with master server"
-    exit 1
+# Test modem connection
+echo "Testing USRobotics 5637 modem connection..."
+if [ -e "/dev/ttyUSB-modem" ]; then
+    echo "Modem device found at /dev/ttyUSB-modem"
+    echo "Testing communication..."
+    echo "ATZ" > /dev/ttyUSB-modem
+    sleep 1
+    response=$(cat /dev/ttyUSB-modem)
+    if [[ $response == *"OK"* ]]; then
+        echo "Modem responding correctly"
+    else
+        echo "Warning: Modem not responding. Please check connections"
+    fi
+else
+    echo "Warning: Modem not found. Please check if USRobotics 5637 is connected"
 fi
+
+echo "Setup complete! Your USRobotics 5637 modem is ready for call screening."
+echo "Monitor logs with: journalctl -u call-detector -f"
 
 # Create default config file with secure permissions
 cat > /etc/call-detector/config.ini << EOL
 [server]
-url = ${MASTER_SERVER_URL}
+url = http://your-master-server
 heartbeat_interval = 30
 
 [device]
-id = ${DEVICE_ID}
-auth_token = ${AUTH_TOKEN}
-encryption_key = ${ENCRYPTION_KEY}
+id = 
+auth_token = 
+encryption_key = 
 
 [modem]
 device = /dev/ttyUSB-modem
@@ -163,36 +166,28 @@ cat > /etc/logrotate.d/call-detector << EOL
 }
 EOL
 
-# Enable and start services
-echo "Enabling modem services..."
-systemctl enable ModemManager
-systemctl start ModemManager
+# Register device with master server
+echo "Registering device with master server..."
+MASTER_SERVER_URL="http://your-master-server"
+REGISTRATION_RESPONSE=$(curl -s -X POST "${MASTER_SERVER_URL}/api/devices/register" \
+  -H "Content-Type: application/json" \
+  -d "{\"deviceName\": \"$(hostname)\", \"deviceType\": \"call_detector\", \"publicKey\": \"$(openssl rand -base64 32)\"}")
 
-# Enable and start call detector service
-echo "Enabling and starting service..."
-systemctl daemon-reload
-systemctl enable call-detector
-systemctl start call-detector
+# Extract credentials from response
+DEVICE_ID=$(echo $REGISTRATION_RESPONSE | jq -r '.deviceId')
+AUTH_TOKEN=$(echo $REGISTRATION_RESPONSE | jq -r '.authToken')
+ENCRYPTION_KEY=$(echo $REGISTRATION_RESPONSE | jq -r '.encryptionKey')
 
-echo "Installation complete!"
-echo "Please verify the device registration in the master interface."
-
-# Test modem connection
-echo "Testing modem connection..."
-if [ -e "/dev/ttyUSB-modem" ]; then
-    echo "Modem device found at /dev/ttyUSB-modem"
-    echo "Testing modem communication..."
-    echo "AT" > /dev/ttyUSB-modem
-    sleep 1
-    response=$(cat /dev/ttyUSB-modem)
-    if [[ $response == *"OK"* ]]; then
-        echo "Modem is responding correctly"
-    else
-        echo "Warning: Modem not responding. Please check connections"
-    fi
-else
-    echo "Warning: Modem device not found. Please check if modem is connected"
+if [ -z "$DEVICE_ID" ] || [ -z "$AUTH_TOKEN" ] || [ -z "$ENCRYPTION_KEY" ]; then
+    echo "Error: Failed to register device with master server"
+    exit 1
 fi
+
+# Update config file with registration details
+sed -i "s/^id =.*/id = ${DEVICE_ID}/" /etc/call-detector/config.ini
+sed -i "s/^auth_token =.*/auth_token = ${AUTH_TOKEN}/" /etc/call-detector/config.ini
+sed -i "s/^encryption_key =.*/encryption_key = ${ENCRYPTION_KEY}/" /etc/call-detector/config.ini
+
 
 # Download AI models
 echo "Setting up AI models..."
