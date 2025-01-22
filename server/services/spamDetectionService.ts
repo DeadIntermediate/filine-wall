@@ -1,6 +1,6 @@
 import * as tf from '@tensorflow/tfjs-node';
-import { db } from "@db";
-import { voicePatterns, callLogs, spamReports } from "@db/schema";
+import { db } from "../db";
+import { voicePatterns, callLogs, spamReports } from "../db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 interface SpamPredictionResult {
@@ -23,39 +23,53 @@ export class SpamDetectionService {
   private static model: tf.LayersModel | null = null;
   private static isModelLoading = false;
   private static isDevelopmentMode = process.env.NODE_ENV === 'development';
-  private static simplifiedModel: tf.LayersModel | null = null;
+  private static modelInitPromise: Promise<void> | null = null;
 
-  static async loadModel() {
+  static async ensureModelInitialized() {
+    if (!this.modelInitPromise) {
+      this.modelInitPromise = this.loadModel();
+    }
+    return this.modelInitPromise;
+  }
+
+  private static async loadModel() {
     if (this.model || this.isModelLoading) return;
 
     try {
       this.isModelLoading = true;
+      console.log('Initializing spam detection model...');
 
       // In development mode, use a simplified model
       if (this.isDevelopmentMode) {
         console.log('Development mode: Using simplified spam detection model');
-        if (!this.simplifiedModel) {
-          this.simplifiedModel = this.createSimplifiedModel();
-          await this.trainSimplifiedModel();
-        }
-        this.model = this.simplifiedModel;
+        this.model = this.createSimplifiedModel();
+        await this.trainSimplifiedModel();
         return;
       }
 
       // Production mode: try to load saved model or create new one
       try {
         this.model = await tf.loadLayersModel('file://./models/spam_detection_model/model.json');
+        console.log('Loaded existing spam detection model');
       } catch {
         console.log('Creating new spam detection model');
         this.model = this.createSimplifiedModel();
         await this.trainModel();
+      }
+    } catch (error) {
+      console.error('Error initializing model:', error);
+      // In development mode, create a backup simple model
+      if (this.isDevelopmentMode) {
+        console.log('Development mode: Creating fallback model');
+        this.model = this.createSimplifiedModel();
+        await this.trainSimplifiedModel();
       }
     } finally {
       this.isModelLoading = false;
     }
   }
 
-  private static createSimplifiedModel() {
+  private static createSimplifiedModel(): tf.LayersModel {
     const model = tf.sequential({
       layers: [
         tf.layers.dense({ units: 16, activation: 'relu', inputShape: [8] }),
@@ -74,6 +88,7 @@ export class SpamDetectionService {
   }
 
   private static async trainSimplifiedModel() {
+    console.log('Training simplified model with synthetic data');
     // Create synthetic training data for development
     const syntheticData = this.generateSyntheticData(100);
     const features = syntheticData.map(d => d.features);
@@ -90,6 +105,7 @@ export class SpamDetectionService {
 
     xs.dispose();
     ys.dispose();
+    console.log('Simplified model training completed');
   }
 
   private static generateSyntheticData(count: number) {
@@ -114,7 +130,7 @@ export class SpamDetectionService {
   }
 
   static async trainModel() {
-    await this.loadModel();
+    await this.ensureModelInitialized();
     if (!this.model) throw new Error('Model not initialized');
 
     if (this.isDevelopmentMode) {
@@ -122,7 +138,6 @@ export class SpamDetectionService {
       return;
     }
 
-    // Get training data from database
     const trainingData = await db.query.callLogs.findMany({
       where: and(
         eq(callLogs.action, 'blocked'),
@@ -137,17 +152,15 @@ export class SpamDetectionService {
       return;
     }
 
-    // Prepare features and labels
     const features = trainingData.map(call => this.extractFeatures(call));
-    const labels = trainingData.map(call =>
-      call.metadata?.isSpam ? 1 : 0
-    );
+    const labels = trainingData.map(call => {
+      const metadata = call.metadata as Record<string, any>;
+      return metadata?.isSpam ? 1 : 0;
+    });
 
-    // Convert to tensors
     const xs = tf.tensor2d(features);
     const ys = tf.tensor2d(labels, [labels.length, 1]);
 
-    // Train the model
     await this.model.fit(xs, ys, {
       epochs: 10,
       batchSize: 32,
@@ -159,21 +172,18 @@ export class SpamDetectionService {
       }
     });
 
-    // Save the updated model
     if (!this.isDevelopmentMode) {
       await this.model.save('file://./models/spam_detection_model');
     }
 
-    // Clean up tensors
     xs.dispose();
     ys.dispose();
   }
 
   static async predictSpam(phoneNumber: string, callData: any): Promise<SpamPredictionResult> {
-    await this.loadModel();
+    await this.ensureModelInitialized();
     if (!this.model) throw new Error('Model not initialized');
 
-    // Get historical data for this number
     const [recentCalls, spamReportsCount, voiceAnalysis] = await Promise.all([
       db.query.callLogs.findMany({
         where: eq(callLogs.phoneNumber, phoneNumber),
@@ -189,7 +199,6 @@ export class SpamDetectionService {
       })
     ]);
 
-    // Extract basic features that work in both production and development
     const features = [
       callData.timeOfDay || 0,
       callData.dayOfWeek || 0,
@@ -201,26 +210,26 @@ export class SpamDetectionService {
       voiceAnalysis?.confidence || 0
     ];
 
-    // Make prediction
     const prediction = tf.tidy(() => {
       const inputTensor = tf.tensor2d([features]);
       const result = this.model!.predict(inputTensor) as tf.Tensor;
       return result.dataSync()[0];
     });
 
-    // In development mode, use additional factors for scoring
+    const voiceAnalysisMetadata = voiceAnalysis?.metadata as Record<string, any> || {};
+    const audioCharacteristics = voiceAnalysisMetadata.audioCharacteristics || {};
+
     const confidence = this.isDevelopmentMode ?
       Math.min(0.3 + (spamReportsCount.length * 0.2) + (features[5] * 0.3), 1) :
       prediction;
 
-    // Prepare detailed result
     const result: SpamPredictionResult = {
       isSpam: confidence > 0.7,
       confidence,
       features: {
         voicePattern: voiceAnalysis ? {
-          roboticScore: voiceAnalysis.metadata?.audioCharacteristics?.energy || 0,
-          naturalness: 1 - (voiceAnalysis.metadata?.audioCharacteristics?.rhythmRegularity || 0)
+          roboticScore: audioCharacteristics.energy || 0,
+          naturalness: 1 - (audioCharacteristics.rhythmRegularity || 0)
         } : undefined,
         callPattern: {
           frequency: features[4],
@@ -240,15 +249,16 @@ export class SpamDetectionService {
   }
 
   private static extractFeatures(call: any): number[] {
+    const metadata = call.metadata as Record<string, any> || {};
     return [
       call.timeOfDay || 0,
       call.dayOfWeek || 0,
       call.duration || 0,
-      call.metadata?.signalStrength || 0,
-      call.metadata?.callFrequency || 0,
-      call.metadata?.blockRate || 0,
-      call.metadata?.spamReports || 0,
-      call.metadata?.voiceEnergy || 0
+      metadata.signalStrength || 0,
+      metadata.callFrequency || 0,
+      metadata.blockRate || 0,
+      metadata.spamReports || 0,
+      metadata.voiceEnergy || 0
     ];
   }
 }

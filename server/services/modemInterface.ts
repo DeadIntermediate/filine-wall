@@ -10,7 +10,7 @@ interface ModemConfig {
   deviceId: string;
   port: string;  // USB port e.g., '/dev/ttyUSB0'
   baudRate: number;
-  developmentMode?: boolean; // Added for testing without hardware
+  developmentMode?: boolean;
 }
 
 export class ModemInterface extends EventEmitter {
@@ -23,6 +23,7 @@ export class ModemInterface extends EventEmitter {
   private retryCount: number = 0;
   private readonly MAX_RETRIES = 3;
   private developmentMode: boolean;
+  private spamModelInitialized: boolean = false;
 
   constructor(config: ModemConfig) {
     super();
@@ -64,11 +65,17 @@ export class ModemInterface extends EventEmitter {
       if (this.developmentMode) {
         console.log('Development mode: Simulating modem initialization');
         this.initialized = true;
+        // Initialize spam detection model
+        await SpamDetectionService.ensureModelInitialized();
+        this.spamModelInitialized = true;
         return true;
       }
 
       await this.openPort();
       await this.configureModem();
+      // Initialize spam detection model
+      await SpamDetectionService.ensureModelInitialized();
+      this.spamModelInitialized = true;
       this.initialized = true;
       console.log('Modem initialized successfully');
       return true;
@@ -124,6 +131,7 @@ export class ModemInterface extends EventEmitter {
       console.log(`Development mode: Simulating command: ${command}`);
       return 'OK';
     }
+
     return new Promise((resolve, reject) => {
       this.lastCommand = command;
       let response = '';
@@ -196,7 +204,23 @@ export class ModemInterface extends EventEmitter {
 
   private async handleIncomingCall(phoneNumber: string): Promise<void> {
     try {
-      // Initialize cache service first
+      if (!this.spamModelInitialized) {
+        console.log('Spam detection model not initialized, using fallback mode');
+        // In development mode, allow calls but with warning
+        if (this.developmentMode) {
+          this.emit('call-allowed', {
+            phoneNumber,
+            confidence: 0.5,
+            features: {
+              developmentMode: true,
+              warning: 'Spam detection model not initialized'
+            }
+          });
+          return;
+        }
+      }
+
+      // Initialize cache service
       const cacheService = CallCachingService.getInstance();
 
       // Check cache first for quick response
@@ -204,7 +228,6 @@ export class ModemInterface extends EventEmitter {
 
       if (cachedResult) {
         if (cachedResult.isSpam) {
-          // Reject call based on cached result
           await this.sendCommand(USR_COMMANDS.HANG_UP);
           this.emit('call-blocked', {
             phoneNumber,
@@ -214,7 +237,6 @@ export class ModemInterface extends EventEmitter {
           });
           return;
         } else if (cachedResult.confidence > 0.9) {
-          // Allow known good numbers immediately
           this.emit('call-allowed', {
             phoneNumber,
             confidence: cachedResult.confidence,
@@ -238,67 +260,76 @@ export class ModemInterface extends EventEmitter {
         }
       };
 
-      // Get predictive spam score
-      const spamPrediction = await SpamDetectionService.predictSpam(phoneNumber, callData);
+      try {
+        // Get predictive spam score
+        const spamPrediction = await SpamDetectionService.predictSpam(phoneNumber, callData);
 
-      // Update cache with new prediction
-      await cacheService.updateCallResult(phoneNumber, {
-        isSpam: spamPrediction.isSpam,
-        confidence: spamPrediction.confidence,
-        metadata: spamPrediction.features
-      });
-
-      if (spamPrediction.isSpam && spamPrediction.confidence > 0.7) {
-        // High confidence spam - reject immediately
-        await this.sendCommand(USR_COMMANDS.HANG_UP);
-        this.emit('call-blocked', {
-          phoneNumber,
-          reason: 'spam_detected',
+        // Update cache with new prediction
+        await cacheService.updateCallResult(phoneNumber, {
+          isSpam: spamPrediction.isSpam,
           confidence: spamPrediction.confidence,
-          features: spamPrediction.features
+          metadata: spamPrediction.features
         });
-      } else if (spamPrediction.confidence < 0.6 || !cachedResult) {
-        // Uncertain calls - perform screening
-        const screeningResult = await this.screenCall(phoneNumber);
-        if (screeningResult === 'blocked') {
+
+        if (spamPrediction.isSpam && spamPrediction.confidence > 0.7) {
           await this.sendCommand(USR_COMMANDS.HANG_UP);
           this.emit('call-blocked', {
             phoneNumber,
-            reason: 'failed_screening',
+            reason: 'spam_detected',
             confidence: spamPrediction.confidence,
-            features: ['Failed voice screening']
+            features: spamPrediction.features
           });
+        } else if (spamPrediction.confidence < 0.6 || !cachedResult) {
+          const screeningResult = await this.screenCall(phoneNumber);
+          if (screeningResult === 'blocked') {
+            await this.sendCommand(USR_COMMANDS.HANG_UP);
+            this.emit('call-blocked', {
+              phoneNumber,
+              reason: 'failed_screening',
+              confidence: spamPrediction.confidence,
+              features: ['Failed voice screening']
+            });
+          } else {
+            this.emit('call-allowed', {
+              phoneNumber,
+              confidence: spamPrediction.confidence,
+              features: spamPrediction.features,
+              metadata: {
+                screeningPassed: true,
+                developmentMode: this.developmentMode
+              }
+            });
+            this.callInProgress = true;
+          }
         } else {
           this.emit('call-allowed', {
             phoneNumber,
             confidence: spamPrediction.confidence,
             features: spamPrediction.features,
-            metadata: {
-              screeningPassed: true,
-              developmentMode: this.developmentMode
-            }
+            metadata: { developmentMode: this.developmentMode }
           });
           this.callInProgress = true;
         }
-      } else {
-        // Allow call with moderate confidence
+      } catch (predictionError) {
+        console.error('Error in spam prediction:', predictionError);
+        // Allow call but with warning
         this.emit('call-allowed', {
           phoneNumber,
-          confidence: spamPrediction.confidence,
-          features: spamPrediction.features,
-          metadata: {
-            developmentMode: this.developmentMode
+          confidence: 0.5,
+          features: {
+            developmentMode: this.developmentMode,
+            warning: 'Spam prediction failed',
+            error: predictionError instanceof Error ? predictionError.message : 'Unknown error'
           }
         });
         this.callInProgress = true;
       }
-
     } catch (error) {
       console.error('Error handling incoming call:', error);
-      // In development mode, we'll still process the call for testing
+      // In development mode, we'll still process the call
       if (this.developmentMode) {
-        this.emit('call-allowed', { 
-          phoneNumber, 
+        this.emit('call-allowed', {
+          phoneNumber,
           confidence: 0.5,
           features: {
             developmentMode: true,
@@ -407,7 +438,6 @@ export class ModemInterface extends EventEmitter {
     }
   }
 
-  // Public method to check modem status
   async getStatus(): Promise<{
     initialized: boolean;
     callInProgress: boolean;
@@ -426,7 +456,7 @@ export class ModemInterface extends EventEmitter {
     };
   }
 
-  // Add development mode testing methods
+  // Development mode test methods
   simulateIncomingCall(phoneNumber: string): void {
     if (!this.developmentMode) {
       console.warn('simulateIncomingCall can only be used in development mode');
@@ -454,7 +484,6 @@ const USR_COMMANDS = {
   ANSWER: 'ATA'
 };
 
-// Example usage:
 async function testModem() {
   const modem = new ModemInterface({
     deviceId: 'device_123',

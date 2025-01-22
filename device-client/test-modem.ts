@@ -1,8 +1,24 @@
-import { ModemInterface } from '../server/services/modemInterface';
-import { fileURLToPath } from 'url';
+import { ModemInterface } from '../server/services/modemInterface.js';
+import { SpamDetectionService } from '../server/services/spamDetectionService.js';
+import { CallCachingService } from '../server/services/callCachingService.js';
+import chalk from 'chalk';
+
+const log = {
+  info: (msg: string) => console.log(chalk.blue('i'), msg),
+  success: (msg: string) => console.log(chalk.green('✓'), msg),
+  error: (msg: string) => console.log(chalk.red('✗'), msg),
+  warning: (msg: string) => console.log(chalk.yellow('!'), msg)
+};
+
+interface TestCase {
+  number: string;
+  description: string;
+  expectedResult: 'blocked' | 'allowed';
+  reason?: string;
+}
 
 async function testModem() {
-  console.log('Starting modem interface test in development mode...');
+  log.info('Starting modem interface test in development mode...');
 
   const modem = new ModemInterface({
     deviceId: 'test_device_123',
@@ -11,67 +27,146 @@ async function testModem() {
     developmentMode: true
   });
 
+  // Track test results
+  let testsRun = 0;
+  let testsPassed = 0;
+  let testsFailed = 0;
+
   // Set up event listeners for modem events
   modem.on('call-blocked', (data) => {
-    console.log('✓ Call blocked:', data);
+    log.success(`Call blocked: ${JSON.stringify(data, null, 2)}`);
+    if (currentTest && currentTest.expectedResult === 'blocked') {
+      testsPassed++;
+      log.success(`Test passed: ${currentTest.description}`);
+    } else if (currentTest) {
+      testsFailed++;
+      log.error(`Test failed: Expected allowed but got blocked for ${currentTest.description}`);
+    }
   });
 
   modem.on('call-allowed', (data) => {
-    console.log('✓ Call allowed:', data);
+    log.success(`Call allowed: ${JSON.stringify(data, null, 2)}`);
+    if (currentTest && currentTest.expectedResult === 'allowed') {
+      testsPassed++;
+      log.success(`Test passed: ${currentTest.description}`);
+    } else if (currentTest) {
+      testsFailed++;
+      log.error(`Test failed: Expected blocked but got allowed for ${currentTest.description}`);
+    }
   });
 
   modem.on('call-screening', (data) => {
-    console.log('i Call screening:', data);
+    log.info(`Call screening: ${JSON.stringify(data, null, 2)}`);
   });
 
   modem.on('error', (error) => {
-    console.error('✗ Modem error:', error);
+    log.error(`Modem error: ${error}`);
+    if (currentTest) {
+      testsFailed++;
+      log.error(`Test failed due to error: ${currentTest.description}`);
+    }
   });
 
+  let currentTest: TestCase | null = null;
+
   try {
-    console.log('Initializing modem...');
+    // Wait for spam detection service initialization
+    log.info('Initializing spam detection service...');
+    await SpamDetectionService.ensureModelInitialized();
+
+    log.info('Initializing modem...');
     const initialized = await modem.initialize();
 
     if (initialized) {
-      console.log('✓ Modem initialized successfully');
+      log.success('Modem initialized successfully');
 
       // Get and display current modem status
       const status = await modem.getStatus();
-      console.log('Current modem status:', status);
+      log.info('Current modem status:');
+      console.log(status);
 
-      console.log('\nTesting call screening functionality...');
+      // Initialize call caching service
+      const cacheService = CallCachingService.getInstance();
+      await cacheService.initialize();
 
-      // Test cases
-      const testCases = [
-        { number: '+1234567890', description: 'Unknown number' },
-        { number: '+1987654321', description: 'Known spam number' },
-        { number: '+1555000999', description: 'Verified safe number' }
+      log.info('\nRunning test cases...');
+
+      // Define test cases
+      const testCases: TestCase[] = [
+        { 
+          number: '+1234567890',
+          description: 'Unknown number with no history',
+          expectedResult: 'allowed'
+        },
+        { 
+          number: '+1987654321',
+          description: 'Known spam number',
+          expectedResult: 'blocked',
+          reason: 'spam_detected'
+        },
+        { 
+          number: '+1555000999',
+          description: 'Verified safe number',
+          expectedResult: 'allowed'
+        },
+        {
+          number: '+1555000000',
+          description: 'Number matching spam pattern',
+          expectedResult: 'blocked'
+        },
+        {
+          number: '+1234123412',
+          description: 'Number requiring voice screening',
+          expectedResult: 'allowed'
+        }
       ];
 
+      // Run test cases
       for (const test of testCases) {
-        console.log(`\nTesting ${test.description}: ${test.number}`);
-        modem.simulateIncomingCall(test.number);
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for processing
+        testsRun++;
+        currentTest = test;
+        log.info(`\nTest case ${testsRun}/${testCases.length}: ${test.description}`);
+        log.info(`Testing number: ${test.number}`);
+
+        try {
+          modem.simulateIncomingCall(test.number);
+          // Increased wait time to ensure proper processing
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        } catch (error) {
+          testsFailed++;
+          log.error(`Test execution failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
 
-      console.log('\nTests completed successfully');
+      // Print test summary
+      log.info('\nTest Summary:');
+      console.log('-------------------');
+      console.log(`Total tests: ${testsRun}`);
+      console.log(`Passed: ${chalk.green(testsPassed)}`);
+      console.log(`Failed: ${chalk.red(testsFailed)}`);
+      console.log('-------------------');
+
+      if (testsFailed > 0) {
+        throw new Error(`${testsFailed} tests failed`);
+      }
+
+      log.success('All tests completed successfully');
     } else {
-      console.error('✗ Failed to initialize modem');
+      log.error('Failed to initialize modem');
       process.exit(1);
     }
   } catch (error) {
-    console.error('✗ Error during modem test:', error);
+    log.error(`Error during modem test: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   } finally {
     await modem.disconnect();
   }
 }
 
-// Check if this file is being run directly using ESM
-const isMainModule = import.meta.url === `file://${process.argv[1]}`;
-if (isMainModule) {
-  testModem().catch(error => {
-    console.error('✗ Fatal error:', error);
-    process.exit(1);
-  });
-}
+// Run the test
+testModem().catch(error => {
+  log.error(`Fatal error: ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
+});
+
+export { testModem };
