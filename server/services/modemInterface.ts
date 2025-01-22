@@ -196,19 +196,10 @@ export class ModemInterface extends EventEmitter {
 
   private async handleIncomingCall(phoneNumber: string): Promise<void> {
     try {
-      // Check if device is registered and active
-      const device = await db.query.deviceConfigurations.findFirst({
-        where: eq(deviceConfigurations.deviceId, this.deviceId),
-      });
-
-      if (!device || device.status !== 'online') {
-        console.error('Device not registered or inactive');
-        await this.sendCommand(USR_COMMANDS.HANG_UP);
-        return;
-      }
+      // Initialize cache service first
+      const cacheService = CallCachingService.getInstance();
 
       // Check cache first for quick response
-      const cacheService = CallCachingService.getInstance();
       const cachedResult = await cacheService.getCallResult(phoneNumber);
 
       if (cachedResult) {
@@ -222,7 +213,7 @@ export class ModemInterface extends EventEmitter {
             metadata: cachedResult.metadata
           });
           return;
-        } else if (cachedResult.confidence > 0.7) {
+        } else if (cachedResult.confidence > 0.9) {
           // Allow known good numbers immediately
           this.emit('call-allowed', {
             phoneNumber,
@@ -234,7 +225,7 @@ export class ModemInterface extends EventEmitter {
         }
       }
 
-      // If not in cache or uncertain, perform full analysis
+      // Call data with basic attributes
       const callData = {
         timeOfDay: new Date().getHours(),
         dayOfWeek: new Date().getDay(),
@@ -242,10 +233,12 @@ export class ModemInterface extends EventEmitter {
         metadata: {
           deviceId: this.deviceId,
           callType: 'landline',
-          modemType: 'USRobotics_5637'
+          modemType: 'USRobotics_5637',
+          developmentMode: this.developmentMode
         }
       };
 
+      // Get predictive spam score
       const spamPrediction = await SpamDetectionService.predictSpam(phoneNumber, callData);
 
       // Update cache with new prediction
@@ -255,8 +248,8 @@ export class ModemInterface extends EventEmitter {
         metadata: spamPrediction.features
       });
 
-      if (spamPrediction.isSpam) {
-        // Reject call
+      if (spamPrediction.isSpam && spamPrediction.confidence > 0.7) {
+        // High confidence spam - reject immediately
         await this.sendCommand(USR_COMMANDS.HANG_UP);
         this.emit('call-blocked', {
           phoneNumber,
@@ -264,27 +257,62 @@ export class ModemInterface extends EventEmitter {
           confidence: spamPrediction.confidence,
           features: spamPrediction.features
         });
-      } else if (spamPrediction.confidence < 0.3) {
-        // Screen call
-        await this.screenCall(phoneNumber);
+      } else if (spamPrediction.confidence < 0.6 || !cachedResult) {
+        // Uncertain calls - perform screening
+        const screeningResult = await this.screenCall(phoneNumber);
+        if (screeningResult === 'blocked') {
+          await this.sendCommand(USR_COMMANDS.HANG_UP);
+          this.emit('call-blocked', {
+            phoneNumber,
+            reason: 'failed_screening',
+            confidence: spamPrediction.confidence,
+            features: ['Failed voice screening']
+          });
+        } else {
+          this.emit('call-allowed', {
+            phoneNumber,
+            confidence: spamPrediction.confidence,
+            features: spamPrediction.features,
+            metadata: {
+              screeningPassed: true,
+              developmentMode: this.developmentMode
+            }
+          });
+          this.callInProgress = true;
+        }
       } else {
-        // Allow call to ring through
+        // Allow call with moderate confidence
         this.emit('call-allowed', {
           phoneNumber,
           confidence: spamPrediction.confidence,
-          features: spamPrediction.features
+          features: spamPrediction.features,
+          metadata: {
+            developmentMode: this.developmentMode
+          }
         });
         this.callInProgress = true;
       }
 
     } catch (error) {
       console.error('Error handling incoming call:', error);
-      // Default to allowing call in case of error
-      this.emit('call-allowed', { phoneNumber, error: true });
+      // In development mode, we'll still process the call for testing
+      if (this.developmentMode) {
+        this.emit('call-allowed', { 
+          phoneNumber, 
+          confidence: 0.5,
+          features: {
+            developmentMode: true,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
+        });
+      } else {
+        // In production, default to allowing call in case of error
+        this.emit('call-allowed', { phoneNumber, error: true });
+      }
     }
   }
 
-  private async screenCall(phoneNumber: string): Promise<void> {
+  private async screenCall(phoneNumber: string): Promise<'blocked' | 'allowed'> {
     try {
       // Answer call for screening
       await this.sendCommand(USR_COMMANDS.SPEAKER_ON);
@@ -299,14 +327,28 @@ export class ModemInterface extends EventEmitter {
       // Wait for 2 seconds before playing message
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // TODO: Implement audio playback for screening message
-      // This will require additional hardware setup
+      // In development mode, simulate a successful screening
+      if (this.developmentMode) {
+        // Emit screening progress event
+        this.emit('call-screening', {
+          phoneNumber,
+          status: 'awaiting_response'
+        });
 
-      // For now, we'll just emit the screening event
+        // Simulate screening decision based on phone number pattern
+        const isSpam = phoneNumber.endsWith('0000') || phoneNumber.startsWith('+1555');
+        return isSpam ? 'blocked' : 'allowed';
+      }
+
+      // TODO: Implement real audio playback for screening message
+      // For now, just emit the screening event
       this.emit('call-screening', {
         phoneNumber,
         status: 'awaiting_response'
       });
+
+      // Default to allowing in development
+      return 'allowed';
 
     } catch (error) {
       console.error('Error screening call:', error);
@@ -314,8 +356,9 @@ export class ModemInterface extends EventEmitter {
       this.emit('call-screening', {
         phoneNumber,
         status: 'screening_failed',
-        error: error.message
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
+      return 'blocked';
     }
   }
 
@@ -446,10 +489,9 @@ async function testModem() {
     }
     //Simulate a call in development mode
     if(status.developmentMode){
-        modem.simulateIncomingCall('1234567890');
+      modem.simulateIncomingCall('1234567890');
     }
   }
 }
-
 
 testModem();

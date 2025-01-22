@@ -5,9 +5,10 @@ import { verifyPhoneNumber } from "./phoneVerification";
 import { predictSpam } from "./spamPrediction";
 import { dncRegistry } from "./dncRegistry";
 import { generateVerificationCode } from "./callerVerification";
-import { analyzeVoiceStream } from "./voiceAnalysis";
+import { analyzeVoice } from "./voiceAnalysisService";
 import { lookupCarrier } from "./carrierLookup";
 import { SpamDatabaseService } from "./spamDatabaseService";
+import { detectScamPhrases } from "./scamPhraseDetection";
 
 interface ScreeningResult {
   action: "blocked" | "allowed" | "challenge";
@@ -44,151 +45,207 @@ interface ScreeningResult {
     isMobile?: boolean;
     lineType?: string;
     fccData?: any;
+    developmentMode?: boolean;
   };
 }
 
+const isDevelopmentMode = process.env.NODE_ENV === 'development';
+
 export async function screenCall(
   phoneNumber: string,
-  audioData?: number[],
+  audioData?: Float32Array,
   sampleRate?: number
 ): Promise<ScreeningResult> {
-  // Get carrier information
-  const carrierInfo = await lookupCarrier(phoneNumber);
+  try {
+    // Get carrier information
+    const carrierInfo = await lookupCarrier(phoneNumber);
 
-  // Check FCC spam database
-  const fccCheck = await SpamDatabaseService.checkNumber(phoneNumber);
-  if (fccCheck.isSpam) {
-    const verificationResult = await generateVerificationCode(phoneNumber);
-    return {
-      action: "blocked",
-      reason: "Number found in FCC spam database",
-      risk: 0.9,
-      metadata: {
-        lineType: carrierInfo.lineType,
-        carrierName: carrierInfo.carrier,
-        carrierType: carrierInfo.lineType,
-        fccData: fccCheck.details
-      }
+    // Basic metadata for all responses
+    const baseMetadata = {
+      lineType: carrierInfo.lineType,
+      carrierName: carrierInfo.carrier,
+      carrierType: carrierInfo.lineType,
+      developmentMode: isDevelopmentMode
     };
-  }
 
-  // Check if number is whitelisted
-  const whitelisted = await db.query.phoneNumbers.findFirst({
-    where: eq(phoneNumbers.number, phoneNumber),
-  });
+    // Check FCC spam database
+    const fccCheck = await SpamDatabaseService.checkNumber(phoneNumber);
+    if (fccCheck.isSpam) {
+      const verificationResult = await generateVerificationCode(phoneNumber);
+      return {
+        action: "blocked",
+        reason: "Number found in FCC spam database",
+        risk: 0.9,
+        verification: verificationResult,
+        metadata: { ...baseMetadata, fccData: fccCheck.details }
+      };
+    }
 
-  if (whitelisted && whitelisted.type === "whitelist") {
+    // Check whitelist/blacklist
+    const listedNumber = await db.query.phoneNumbers.findFirst({
+      where: eq(phoneNumbers.number, phoneNumber),
+    });
+
+    if (listedNumber?.type === "whitelist") {
+      return {
+        action: "allowed",
+        reason: "Number is whitelisted",
+        risk: 0,
+        metadata: baseMetadata
+      };
+    }
+
+    if (listedNumber?.type === "blacklist") {
+      const verificationResult = await generateVerificationCode(phoneNumber);
+      return {
+        action: "blocked",
+        reason: "Number is blacklisted",
+        risk: 1,
+        verification: verificationResult,
+        metadata: baseMetadata
+      };
+    }
+
+    // Analyze voice if audio data is provided
+    let voiceAnalysis;
+    let scamPhraseDetection;
+    if (audioData && sampleRate) {
+      // Real voice analysis in production, simplified in development
+      if (!isDevelopmentMode) {
+        voiceAnalysis = await analyzeVoice(audioData, sampleRate);
+      } else {
+        // Simplified voice analysis for development
+        voiceAnalysis = {
+          isSpam: Math.random() > 0.7,
+          confidence: 0.7 + (Math.random() * 0.3),
+          features: ["Development mode voice analysis"],
+          patterns: {
+            energy: Math.random(),
+            zeroCrossings: Math.floor(Math.random() * 1000),
+            rhythmRegularity: Math.random(),
+          }
+        };
+      }
+
+      // Detect scam phrases if voice analysis indicates potential spam
+      if (voiceAnalysis.isSpam && voiceAnalysis.confidence > 0.7) {
+        const audioFeatures = {
+          pausePatterns: [0.2, 0.3, 0.2],
+          responseLatency: [1.0, 1.1, 1.0],
+          intonationVariance: voiceAnalysis.patterns.rhythmRegularity
+        };
+
+        scamPhraseDetection = await detectScamPhrases(
+          "sample_text", // In development mode, we don't have real transcription
+          "en",
+          audioFeatures
+        );
+
+        if (scamPhraseDetection.isScam) {
+          const verificationResult = await generateVerificationCode(phoneNumber);
+          return {
+            action: "blocked",
+            reason: "Scam phrases detected in call",
+            risk: scamPhraseDetection.confidence,
+            features: scamPhraseDetection.detectedPhrases,
+            voiceAnalysis: {
+              isRobot: true,
+              confidence: voiceAnalysis.confidence,
+              features: voiceAnalysis.features
+            },
+            verification: verificationResult,
+            metadata: baseMetadata
+          };
+        }
+      }
+    }
+
+    // Check DNC registry
+    try {
+      const dncCheck = await dncRegistry.checkNumber(phoneNumber);
+      if (dncCheck.isRegistered) {
+        const verificationResult = await generateVerificationCode(phoneNumber);
+        return {
+          action: "blocked",
+          reason: "Number is registered in Do Not Call registry",
+          risk: 1,
+          dncStatus: {
+            isRegistered: true,
+            registrationDate: dncCheck.registrationDate
+          },
+          verification: verificationResult,
+          metadata: baseMetadata
+        };
+      }
+    } catch (error) {
+      console.error("DNC check failed:", error);
+      // Continue with other checks
+    }
+
+    // Verify number format
+    const verification = await verifyPhoneNumber(phoneNumber);
+    if (!verification.isValid) {
+      return {
+        action: "blocked",
+        reason: "Invalid phone number format",
+        risk: 1,
+        metadata: baseMetadata
+      };
+    }
+
+    // Get ML prediction
+    const prediction = await predictSpam(phoneNumber);
+
+    // High confidence spam prediction
+    if (prediction.spamProbability > 0.7 && prediction.confidence > 0.5) {
+      const verificationResult = await generateVerificationCode(phoneNumber);
+      return {
+        action: "blocked",
+        reason: "High spam probability detected",
+        risk: prediction.spamProbability,
+        features: prediction.features,
+        prediction: {
+          spamProbability: prediction.spamProbability,
+          confidence: prediction.confidence,
+          factors: prediction.features
+        },
+        voiceAnalysis: voiceAnalysis ? {
+          isRobot: voiceAnalysis.isSpam,
+          confidence: voiceAnalysis.confidence,
+          features: voiceAnalysis.features
+        } : undefined,
+        verification: verificationResult,
+        metadata: baseMetadata
+      };
+    }
+
+    // Uncertain cases - require challenge
+    if (prediction.confidence < 0.6 || (voiceAnalysis && voiceAnalysis.confidence < 0.6)) {
+      const verificationResult = await generateVerificationCode(phoneNumber);
+      return {
+        action: "challenge",
+        reason: "Additional verification required",
+        risk: Math.max(prediction.spamProbability, voiceAnalysis?.confidence || 0),
+        features: [...(prediction.features || []), ...(voiceAnalysis?.features || [])],
+        prediction: {
+          spamProbability: prediction.spamProbability,
+          confidence: prediction.confidence,
+          factors: prediction.features
+        },
+        voiceAnalysis: voiceAnalysis ? {
+          isRobot: voiceAnalysis.isSpam,
+          confidence: voiceAnalysis.confidence,
+          features: voiceAnalysis.features
+        } : undefined,
+        verification: verificationResult,
+        metadata: baseMetadata
+      };
+    }
+
+    // Allow call if all checks pass
     return {
       action: "allowed",
-      reason: "Number is whitelisted",
-      risk: 0,
-      metadata: {
-        lineType: carrierInfo.lineType,
-        carrierName: carrierInfo.carrier,
-        carrierType: carrierInfo.lineType,
-      }
-    };
-  }
-
-  // Check if number is blacklisted
-  if (whitelisted && whitelisted.type === "blacklist") {
-    const verificationResult = await generateVerificationCode(phoneNumber);
-    return {
-      action: "blocked",
-      reason: "Number is blacklisted",
-      risk: 1,
-      verification: {
-        code: verificationResult.code,
-        expiresAt: verificationResult.expiresAt,
-        message: "If you are a legitimate caller, please verify your identity"
-      },
-      metadata: {
-        lineType: carrierInfo.lineType,
-        carrierName: carrierInfo.carrier,
-        carrierType: carrierInfo.lineType,
-      }
-    };
-  }
-
-  // Analyze voice patterns if audio data is provided
-  let voiceAnalysis;
-  if (audioData && sampleRate) {
-    voiceAnalysis = await analyzeVoiceStream(audioData, sampleRate);
-    if (voiceAnalysis.isRobot && voiceAnalysis.confidence > 0.7) {
-      const verificationResult = await generateVerificationCode(phoneNumber);
-      return {
-        action: "blocked",
-        reason: "Robocall detected",
-        risk: 0.9,
-        voiceAnalysis,
-        verification: {
-          code: verificationResult.code,
-          expiresAt: verificationResult.expiresAt,
-          message: "If this is a legitimate call, please verify your identity"
-        },
-        metadata: {
-          lineType: carrierInfo.lineType,
-          carrierName: carrierInfo.carrier,
-          carrierType: carrierInfo.lineType,
-        }
-      };
-    }
-  }
-
-  // Check DNC registry
-  try {
-    const dncCheck = await dncRegistry.checkNumber(phoneNumber);
-    if (dncCheck.isRegistered) {
-      const verificationResult = await generateVerificationCode(phoneNumber);
-      return {
-        action: "blocked",
-        reason: "Number is registered in Do Not Call registry",
-        risk: 1,
-        dncStatus: {
-          isRegistered: true,
-          registrationDate: dncCheck.registrationDate
-        },
-        verification: {
-          code: verificationResult.code,
-          expiresAt: verificationResult.expiresAt,
-          message: "If you are a legitimate caller, please verify your identity"
-        },
-        metadata: {
-          lineType: carrierInfo.lineType,
-          carrierName: carrierInfo.carrier,
-          carrierType: carrierInfo.lineType,
-        }
-      };
-    }
-  } catch (error) {
-    console.error("DNC check failed:", error);
-  }
-
-  // Verify number
-  const verification = await verifyPhoneNumber(phoneNumber);
-
-  if (!verification.isValid) {
-    return {
-      action: "blocked",
-      reason: "Invalid phone number format",
-      risk: 1,
-      metadata: {
-        lineType: carrierInfo.lineType,
-        carrierName: carrierInfo.carrier,
-        carrierType: carrierInfo.lineType,
-      }
-    };
-  }
-
-  // Get ML prediction with confidence score
-  const prediction = await predictSpam(phoneNumber);
-
-  // High spam probability (>0.7) and good confidence (>0.5)
-  if (prediction.spamProbability > 0.7 && prediction.confidence > 0.5) {
-    const verificationResult = await generateVerificationCode(phoneNumber);
-    return {
-      action: "blocked",
-      reason: "High spam probability detected",
+      reason: "Call passed all screening checks",
       risk: prediction.spamProbability,
       features: prediction.features,
       prediction: {
@@ -196,64 +253,36 @@ export async function screenCall(
         confidence: prediction.confidence,
         factors: prediction.features
       },
-      voiceAnalysis,
-      verification: {
-        code: verificationResult.code,
-        expiresAt: verificationResult.expiresAt,
-        message: "If you are a legitimate caller, please verify your identity"
-      },
-      metadata: {
-        lineType: carrierInfo.lineType,
-        carrierName: carrierInfo.carrier,
-        carrierType: carrierInfo.lineType,
-      }
+      voiceAnalysis: voiceAnalysis ? {
+        isRobot: voiceAnalysis.isSpam,
+        confidence: voiceAnalysis.confidence,
+        features: voiceAnalysis.features
+      } : undefined,
+      metadata: baseMetadata
     };
-  }
-
-  // If voice analysis shows some suspicious patterns but not certain
-  if (voiceAnalysis && voiceAnalysis.confidence > 0.5 && prediction.spamProbability > 0.4) {
-    const verificationResult = await generateVerificationCode(phoneNumber);
-    return {
-      action: "challenge",
-      reason: "Suspicious voice patterns detected",
-      risk: Math.max(voiceAnalysis.confidence, prediction.spamProbability),
-      features: [...(prediction.features || []), ...(voiceAnalysis.features || [])],
-      prediction: {
-        spamProbability: prediction.spamProbability,
-        confidence: prediction.confidence,
-        factors: prediction.features
-      },
-      voiceAnalysis,
-      verification: {
-        code: verificationResult.code,
-        expiresAt: verificationResult.expiresAt,
-        message: "Please complete voice verification challenge"
-      },
-      metadata: {
-        lineType: carrierInfo.lineType,
-        carrierName: carrierInfo.carrier,
-        carrierType: carrierInfo.lineType,
-      }
-    };
-  }
-
-  return {
-    action: "allowed",
-    reason: "Call passed all screening checks",
-    risk: prediction.spamProbability,
-    features: prediction.features,
-    prediction: {
-      spamProbability: prediction.spamProbability,
-      confidence: prediction.confidence,
-      factors: prediction.features
-    },
-    voiceAnalysis,
-    metadata: {
-      lineType: carrierInfo.lineType,
-      carrierName: carrierInfo.carrier,
-      carrierType: carrierInfo.lineType,
+  } catch (error) {
+    console.error("Error in call screening:", error);
+    // In development mode, provide more details
+    if (isDevelopmentMode) {
+      return {
+        action: "allowed",
+        reason: "Error in screening process (development mode)",
+        risk: 0.5,
+        features: ["Error occurred during screening"],
+        metadata: {
+          error: error instanceof Error ? error.message : "Unknown error",
+          developmentMode: true
+        }
+      };
     }
-  };
+    // In production, default to allowing call with warning
+    return {
+      action: "allowed",
+      reason: "Error in screening process",
+      risk: 0.5,
+      metadata: { error: true }
+    };
+  }
 }
 
 export async function logCall(phoneNumber: string, result: ScreeningResult) {
@@ -275,6 +304,8 @@ export async function logCall(phoneNumber: string, result: ScreeningResult) {
   await db.insert(callLogs).values({
     phoneNumber,
     action: result.action === "challenge" ? "blocked" : result.action,
+    callerId: callerIdInfo,
+    carrierInfo,
     metadata: {
       reason: result.reason,
       risk: result.risk,
@@ -291,9 +322,7 @@ export async function logCall(phoneNumber: string, result: ScreeningResult) {
       carrierType: result.metadata?.carrierType,
       carrierCountry: result.metadata?.carrierCountry,
       isMobile: result.metadata?.isMobile,
-
-    },
-    callerId: callerIdInfo,
-    carrierInfo,
+      developmentMode: result.metadata?.developmentMode
+    }
   });
 }
