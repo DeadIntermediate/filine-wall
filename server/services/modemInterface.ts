@@ -10,25 +10,11 @@ interface ModemConfig {
   deviceId: string;
   port: string;  // USB port e.g., '/dev/ttyUSB0'
   baudRate: number;
+  developmentMode?: boolean; // Added for testing without hardware
 }
 
-// USRobotics specific AT commands
-const USR_COMMANDS = {
-  RESET: 'ATZ',
-  FACTORY_RESET: 'AT&F',
-  CALLER_ID: 'AT+VCID=1',
-  VOICE_MODE: 'AT+FCLASS=0',
-  NO_AUTO_ANSWER: 'ATS0=0',
-  FLOW_CONTROL: 'AT&K3',
-  SAVE_SETTINGS: 'AT&W',
-  SPEAKER_ON: 'ATM1',
-  SPEAKER_OFF: 'ATM0',
-  HANG_UP: 'ATH',
-  ANSWER: 'ATA'
-};
-
 export class ModemInterface extends EventEmitter {
-  private port: SerialPort;
+  private port: SerialPort | null;
   private deviceId: string;
   private buffer: string = '';
   private initialized: boolean = false;
@@ -36,26 +22,35 @@ export class ModemInterface extends EventEmitter {
   private lastCommand: string = '';
   private retryCount: number = 0;
   private readonly MAX_RETRIES = 3;
+  private developmentMode: boolean;
 
   constructor(config: ModemConfig) {
     super();
     this.deviceId = config.deviceId;
-    this.port = new SerialPort({
-      path: config.port,
-      baudRate: config.baudRate || 115200,
-      autoOpen: false,
-      dataBits: 8,
-      stopBits: 1,
-      parity: 'none',
-      rtscts: true, // Hardware flow control for USRobotics
-      xon: true,    // Software flow control
-      xoff: true
-    });
+    this.developmentMode = config.developmentMode || false;
 
-    this.setupEventListeners();
+    if (!this.developmentMode) {
+      this.port = new SerialPort({
+        path: config.port,
+        baudRate: config.baudRate || 115200,
+        autoOpen: false,
+        dataBits: 8,
+        stopBits: 1,
+        parity: 'none',
+        rtscts: true,
+        xon: true,
+        xoff: true
+      });
+      this.setupEventListeners();
+    } else {
+      this.port = null;
+      console.log('ModemInterface running in development mode');
+    }
   }
 
   private setupEventListeners(): void {
+    if (!this.port || this.developmentMode) return;
+
     this.port.on('data', (data: Buffer) => this.handleData(data));
     this.port.on('error', (error: Error) => this.handleError(error));
     this.port.on('close', () => {
@@ -66,6 +61,12 @@ export class ModemInterface extends EventEmitter {
 
   async initialize(): Promise<boolean> {
     try {
+      if (this.developmentMode) {
+        console.log('Development mode: Simulating modem initialization');
+        this.initialized = true;
+        return true;
+      }
+
       await this.openPort();
       await this.configureModem();
       this.initialized = true;
@@ -73,14 +74,18 @@ export class ModemInterface extends EventEmitter {
       return true;
     } catch (error) {
       console.error('Modem initialization failed:', error);
-      await this.attemptRecovery();
+      if (!this.developmentMode) {
+        await this.attemptRecovery();
+      }
       return false;
     }
   }
 
   private async openPort(): Promise<void> {
+    if (this.developmentMode) return;
+
     return new Promise((resolve, reject) => {
-      this.port.open((err) => {
+      this.port!.open((err) => {
         if (err) {
           reject(new Error(`Failed to open port: ${err.message}`));
         } else {
@@ -115,11 +120,15 @@ export class ModemInterface extends EventEmitter {
   }
 
   private async sendCommand(command: string): Promise<string> {
+    if (this.developmentMode) {
+      console.log(`Development mode: Simulating command: ${command}`);
+      return 'OK';
+    }
     return new Promise((resolve, reject) => {
       this.lastCommand = command;
       let response = '';
       const timeout = setTimeout(() => {
-        this.port.removeListener('data', handleResponse);
+        this.port?.removeListener('data', handleResponse);
         reject(new Error(`Command timeout: ${command}`));
       }, 5000);
 
@@ -127,7 +136,7 @@ export class ModemInterface extends EventEmitter {
         response += data.toString();
         if (response.includes('OK') || response.includes('ERROR')) {
           clearTimeout(timeout);
-          this.port.removeListener('data', handleResponse);
+          this.port?.removeListener('data', handleResponse);
           if (response.includes('ERROR')) {
             reject(new Error(`Command failed: ${command} - Response: ${response}`));
           } else {
@@ -136,11 +145,11 @@ export class ModemInterface extends EventEmitter {
         }
       };
 
-      this.port.on('data', handleResponse);
-      this.port.write(command + '\r\n', (err) => {
+      this.port?.on('data', handleResponse);
+      this.port?.write(command + '\r\n', (err) => {
         if (err) {
           clearTimeout(timeout);
-          this.port.removeListener('data', handleResponse);
+          this.port?.removeListener('data', handleResponse);
           reject(new Error(`Failed to send command: ${err.message}`));
         }
       });
@@ -340,9 +349,14 @@ export class ModemInterface extends EventEmitter {
   }
 
   async disconnect(): Promise<void> {
-    if (this.port.isOpen) {
+    if (this.developmentMode) {
+      this.initialized = false;
+      return;
+    }
+
+    if (this.port?.isOpen) {
       return new Promise((resolve) => {
-        this.port.close(() => {
+        this.port!.close(() => {
           this.initialized = false;
           resolve();
         });
@@ -357,23 +371,53 @@ export class ModemInterface extends EventEmitter {
     lastCommand: string;
     retryCount: number;
     portOpen: boolean;
+    developmentMode: boolean;
   }> {
     return {
       initialized: this.initialized,
       callInProgress: this.callInProgress,
       lastCommand: this.lastCommand,
       retryCount: this.retryCount,
-      portOpen: this.port.isOpen
+      portOpen: this.developmentMode ? false : (this.port?.isOpen || false),
+      developmentMode: this.developmentMode
     };
   }
+
+  // Add development mode testing methods
+  simulateIncomingCall(phoneNumber: string): void {
+    if (!this.developmentMode) {
+      console.warn('simulateIncomingCall can only be used in development mode');
+      return;
+    }
+
+    this.handleIncomingCall(phoneNumber).catch(error => {
+      console.error('Error handling simulated call:', error);
+    });
+  }
 }
+
+// USRobotics specific AT commands
+const USR_COMMANDS = {
+  RESET: 'ATZ',
+  FACTORY_RESET: 'AT&F',
+  CALLER_ID: 'AT+VCID=1',
+  VOICE_MODE: 'AT+FCLASS=0',
+  NO_AUTO_ANSWER: 'ATS0=0',
+  FLOW_CONTROL: 'AT&K3',
+  SAVE_SETTINGS: 'AT&W',
+  SPEAKER_ON: 'ATM1',
+  SPEAKER_OFF: 'ATM0',
+  HANG_UP: 'ATH',
+  ANSWER: 'ATA'
+};
 
 // Example usage:
 async function testModem() {
   const modem = new ModemInterface({
     deviceId: 'device_123',
     port: '/dev/ttyUSB0',
-    baudRate: 115200
+    baudRate: 115200,
+    developmentMode: true // Set to true for development testing
   });
 
   modem.on('call-blocked', (data) => {
@@ -394,10 +438,16 @@ async function testModem() {
 
 
   const initialized = await modem.initialize();
-  if(initialized){
+  if (initialized) {
     const status = await modem.getStatus();
     console.log('Modem Status:', status);
-    await modem.disconnect();
+    if (!status.developmentMode) {
+      await modem.disconnect();
+    }
+    //Simulate a call in development mode
+    if(status.developmentMode){
+        modem.simulateIncomingCall('1234567890');
+    }
   }
 }
 

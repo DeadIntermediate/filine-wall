@@ -1,12 +1,14 @@
 import { ModemInterface } from '../server/services/modemInterface';
+import { fileURLToPath } from 'url';
 
 async function testModem() {
-  console.log('Starting USRobotics 5637 modem test...');
+  console.log('Starting modem interface test in development mode...');
 
   const modem = new ModemInterface({
-    deviceId: 'usrobotics_5637',
-    port: '/dev/ttyUSB-modem', // Using symlink created by udev rules
-    baudRate: 115200
+    deviceId: 'test_device_123',
+    port: '/dev/null',
+    baudRate: 115200,
+    developmentMode: true
   });
 
   // Set up event listeners for modem events
@@ -37,11 +39,22 @@ async function testModem() {
       const status = await modem.getStatus();
       console.log('Current modem status:', status);
 
-      console.log('\nWaiting for incoming calls (press Ctrl+C to exit)...');
-      console.log('NOTE: The modem should be connected to your phone line');
+      console.log('\nTesting call screening functionality...');
 
-      // Keep the process running to receive calls
-      await new Promise(() => {});
+      // Test cases
+      const testCases = [
+        { number: '+1234567890', description: 'Unknown number' },
+        { number: '+1987654321', description: 'Known spam number' },
+        { number: '+1555000999', description: 'Verified safe number' }
+      ];
+
+      for (const test of testCases) {
+        console.log(`\nTesting ${test.description}: ${test.number}`);
+        modem.simulateIncomingCall(test.number);
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for processing
+      }
+
+      console.log('\nTests completed successfully');
     } else {
       console.error('✗ Failed to initialize modem');
       process.exit(1);
@@ -54,8 +67,9 @@ async function testModem() {
   }
 }
 
-// Only run if this file is being run directly
-if (require.main === module) {
+// Check if this file is being run directly using ESM
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
   testModem().catch(error => {
     console.error('✗ Fatal error:', error);
     process.exit(1);
