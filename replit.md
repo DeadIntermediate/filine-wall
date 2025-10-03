@@ -2,7 +2,7 @@
 
 ## Overview
 
-ScamShield is a comprehensive anti-telemarketing and spam call protection system that combines hardware modem integration, AI-powered voice analysis, and real-time call screening. The system intercepts incoming calls at the hardware level using a USRobotics 5637 modem, analyzes caller patterns and voice characteristics, and automatically blocks or screens spam calls before they reach the user's phone.
+ScamShield is a comprehensive anti-telemarketing and spam call protection system that combines hardware modem integration, AI-powered voice analysis, and real-time call screening. The system intercepts incoming calls at the hardware level using a V.92 USB modem (supports USRobotics 5637 and StarTech 56k USB models), analyzes caller patterns and voice characteristics, and automatically blocks or screens spam calls before they reach the user's phone.
 
 The application provides both a master interface for administrators to manage the entire system and device interfaces for end users to monitor their protected lines.
 
@@ -57,8 +57,10 @@ Preferred communication style: Simple, everyday language.
 - **Device Authentication**: AES-256 encryption using device auth tokens
 
 ### Hardware Integration
-- **Modem Support**: USRobotics 5637 USB modem via SerialPort
-- **Communication Protocol**: AT command set for call control
+- **Modem Support**: V.92 USB modems via SerialPort
+  - USRobotics 5637 USB Fax Modem
+  - StarTech 56k USB Dial-up and Fax Modem V.92 External
+- **Communication Protocol**: Standard AT command set for call control
 - **Features**:
   - Caller ID capture (VCID)
   - Hardware-level call blocking (ATH)
@@ -69,6 +71,7 @@ Preferred communication style: Simple, everyday language.
 - Encrypted communication with central server
 - Modem initialization and monitoring
 - Real-time call event transmission
+- Automatic modem detection via udev rules
 
 ### AI/ML Components
 - **Framework**: TensorFlow.js Node bindings
@@ -107,6 +110,8 @@ Preferred communication style: Simple, everyday language.
 - `DNC_REGISTRY_API_KEY`: DNC registry API key (placeholder)
 
 ### Hardware Requirements
-- **Modem**: USRobotics 5637 or compatible AT command modem
+- **Modem**: V.92 USB modem with AT command support
+  - Supported models: USRobotics 5637, StarTech 56k USB V.92 (USB56KEMH2)
+  - Any V.92 modem with standard Caller ID support should work
 - **Device Client**: Linux-based system (Raspberry Pi recommended) with USB support
 - **Network**: Stable connection between device client and central server

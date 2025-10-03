@@ -1,7 +1,11 @@
-# Call Flow with USRobotics 5637 Modem
+# Call Flow with V.92 USB Modem
+
+## Supported Hardware
+- USRobotics 5637 USB Fax Modem
+- StarTech 56k USB Dial-up and Fax Modem V.92 External
 
 ## Hardware Setup
-1. Connect the USRobotics 5637 modem to your Raspberry Pi via USB
+1. Connect your USB modem to your Raspberry Pi via USB
 2. Connect your phone line to the modem's LINE port
 3. Connect your phone to the modem's PHONE port
 
@@ -33,18 +37,19 @@
    - Let ring continue to phone
 ```
 
-The USRobotics 5637 is ideal for this setup because:
+These V.92 USB modems are ideal for this setup because:
 1. Supports Caller ID capture (VCID)
 2. Hardware-level call control
 3. Voice quality sampling
 4. Compatible with standard AT commands
 5. Reliable USB interface
+6. Automatic device detection
 
 ## Installation
 The setup script (`device-client/setup.sh`) automatically:
-1. Detects your USRobotics 5637 modem
+1. Detects your supported V.92 USB modem
 2. Creates proper device symlinks
-3. Sets up udev rules
+3. Sets up udev rules for both USRobotics and StarTech modems
 4. Configures modem initialization
 5. Sets up the necessary permissions
 

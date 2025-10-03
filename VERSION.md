@@ -1,5 +1,17 @@
 # ScamShield Version History
 
+## Version 1.0.0-alpha.2 (October 03, 2025)
+
+### Added
+- Extended hardware support to include StarTech 56k USB Dial-up and Fax Modem V.92 External
+- Multiple USB vendor/product ID detection in udev rules
+- Automatic detection for both USRobotics 5637 and StarTech V.92 modems
+
+### Changed
+- Updated setup script to detect multiple modem types
+- Generalized modem references to "V.92 USB modem" throughout documentation
+- Enhanced udev rules file to support additional modem chipsets
+
 ## Version 1.0.0-alpha.1 (January 03, 2025)
 
 ### Added
@@ -10,7 +22,7 @@
   * Toggleable dashboard components
 
 - Device Client Implementation
-  * USB modem support (USRobotics 5637 and similar devices)
+  * USB modem support (V.92 modems including USRobotics 5637)
   * Secure device authentication
   * Real-time call monitoring
   * Automatic modem detection and configuration

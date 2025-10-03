@@ -27,11 +27,16 @@ mkdir -p /etc/call-detector /var/log/call-detector
 chown calldetector:calldetector /var/log/call-detector
 chmod 700 /etc/call-detector
 
-# USRobotics 5637 udev rules
-cat > /etc/udev/rules.d/99-usrobotics-modem.rules << EOL
+# Supported USB modem udev rules
+cat > /etc/udev/rules.d/99-supported-modems.rules << EOL
 # USRobotics 5637 USB Fax Modem
 SUBSYSTEM=="tty", ATTRS{idVendor}=="0baf", ATTRS{idProduct}=="0303", SYMLINK+="ttyUSB-modem", MODE="0660", GROUP="dialout"
+# Prolific chipset (used by some USRobotics and StarTech modems)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", SYMLINK+="ttyUSB-modem", MODE="0660", GROUP="dialout"
+# StarTech 56k USB V.92 Modem (USB56KEMH2)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="06cd", ATTRS{idProduct}=="0121", SYMLINK+="ttyUSB-modem", MODE="0660", GROUP="dialout"
+# StarTech 56k USB V.92 Modem (alternative chipset)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0557", ATTRS{idProduct}=="2008", SYMLINK+="ttyUSB-modem", MODE="0660", GROUP="dialout"
 EOL
 
 # Reload udev
@@ -57,7 +62,7 @@ chmod +x /etc/call-detector/init-modem.sh
 # Systemd service
 cat > /etc/systemd/system/call-detector.service << EOL
 [Unit]
-Description=Call Detector Service with USRobotics 5637
+Description=Call Detector Service with V.92 USB Modem
 After=network.target ModemManager.service
 Wants=ModemManager.service
 
@@ -94,7 +99,7 @@ systemctl enable call-detector
 systemctl start call-detector
 
 # Test modem connection
-echo "Testing USRobotics 5637 modem connection..."
+echo "Testing V.92 USB modem connection..."
 if [ -e "/dev/ttyUSB-modem" ]; then
     echo "Modem device found at /dev/ttyUSB-modem"
     echo "Testing communication..."
@@ -107,10 +112,11 @@ if [ -e "/dev/ttyUSB-modem" ]; then
         echo "Warning: Modem not responding. Please check connections"
     fi
 else
-    echo "Warning: Modem not found. Please check if USRobotics 5637 is connected"
+    echo "Warning: Modem not found. Please check if supported modem is connected"
+    echo "Supported models: USRobotics 5637, StarTech 56k USB V.92"
 fi
 
-echo "Setup complete! Your USRobotics 5637 modem is ready for call screening."
+echo "Setup complete! Your V.92 USB modem is ready for call screening."
 echo "Monitor logs with: journalctl -u call-detector -f"
 
 # Create default config file with secure permissions

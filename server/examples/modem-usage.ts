@@ -1,10 +1,11 @@
 import { ModemInterface } from '../services/modemInterface';
 
 // Example usage of the ModemInterface
+// Works with USRobotics 5637, StarTech 56k USB V.92, and compatible modems
 async function main() {
   const modem = new ModemInterface({
-    deviceId: 'usrobotics_5637',
-    port: '/dev/ttyUSB0', // Typical USB modem port
+    deviceId: 'v92_modem_001',
+    port: '/dev/ttyUSB0', // Typical USB modem port (or use /dev/ttyUSB-modem symlink)
     baudRate: 115200
   });
 

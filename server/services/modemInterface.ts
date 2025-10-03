@@ -103,7 +103,8 @@ export class ModemInterface extends EventEmitter {
   }
 
   private async configureModem(): Promise<void> {
-    // USRobotics specific initialization sequence
+    // Standard V.92 modem initialization sequence
+    // Compatible with USRobotics 5637 and StarTech 56k USB modems
     const initCommands = [
       { cmd: USR_COMMANDS.RESET, delay: 1000 },
       { cmd: USR_COMMANDS.FACTORY_RESET, delay: 1000 },
