@@ -46,6 +46,7 @@ interface ScreeningResult {
     lineType?: string;
     fccData?: any;
     developmentMode?: boolean;
+    error?: any;
   };
 }
 

@@ -1,6 +1,6 @@
 import * as tf from '@tensorflow/tfjs-node';
-import { db } from "../db";
-import { voicePatterns, callLogs, spamReports } from "../db/schema";
+import { db } from "@db";
+import { voicePatterns, callLogs, spamReports } from "@db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 interface SpamPredictionResult {
@@ -152,8 +152,8 @@ export class SpamDetectionService {
       return;
     }
 
-    const features = trainingData.map(call => this.extractFeatures(call));
-    const labels = trainingData.map(call => {
+    const features = trainingData.map((call: any) => this.extractFeatures(call));
+    const labels = trainingData.map((call: any) => {
       const metadata = call.metadata as Record<string, any>;
       return metadata?.isSpam ? 1 : 0;
     });
@@ -205,7 +205,7 @@ export class SpamDetectionService {
       callData.duration || 0,
       callData.metadata?.signalStrength || 0,
       recentCalls.length || 0,
-      recentCalls.filter(c => c.action === 'blocked').length / Math.max(recentCalls.length, 1),
+      recentCalls.filter((c: any) => c.action === 'blocked').length / Math.max(recentCalls.length, 1),
       spamReportsCount.length || 0,
       voiceAnalysis?.confidence || 0
     ];

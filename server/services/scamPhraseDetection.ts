@@ -269,18 +269,18 @@ export async function learnNewScamPhrases(
 
   // Store the new pattern in the database for future analysis
   await db.insert(voicePatterns).values({
-    patternType: 'scam_phrase',
+    confidence: "0.8", // High confidence since it's confirmed
     features: {
       text,
       language,
       category,
       confirmedAt: new Date().toISOString()
     },
-    confidence: 0.8, // High confidence since it's confirmed
     language,
     metadata: {
       category,
-      source: 'user_report'
+      source: 'user_report',
+      patternType: 'scam_phrase'
     }
   });
 }
