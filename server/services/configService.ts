@@ -122,12 +122,13 @@ export class ConfigService {
       },
       notifications: {
         discord: {
-          ...DEFAULT_CONFIG.notifications.discord,
-          ...partial.notifications?.discord
+          enabled: partial.notifications?.discord?.enabled ?? DEFAULT_CONFIG.notifications.discord?.enabled ?? false,
+          webhookUrl: partial.notifications?.discord?.webhookUrl ?? DEFAULT_CONFIG.notifications.discord?.webhookUrl
         },
         telegram: {
-          ...DEFAULT_CONFIG.notifications.telegram,
-          ...partial.notifications?.telegram
+          enabled: partial.notifications?.telegram?.enabled ?? DEFAULT_CONFIG.notifications.telegram?.enabled ?? false,
+          botToken: partial.notifications?.telegram?.botToken ?? DEFAULT_CONFIG.notifications.telegram?.botToken,
+          chatId: partial.notifications?.telegram?.chatId ?? DEFAULT_CONFIG.notifications.telegram?.chatId
         }
       },
       externalSources: {

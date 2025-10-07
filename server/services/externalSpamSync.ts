@@ -65,7 +65,8 @@ export class ExternalSpamSyncService {
       total: 0
     };
 
-    for (const [sourceId, source] of this.sources) {
+    const sourcesArray = Array.from(this.sources.entries());
+    for (const [sourceId, source] of sourcesArray) {
       if (!source.enabled) {
         console.log(`Skipping ${source.name} - not enabled`);
         continue;
@@ -103,8 +104,9 @@ export class ExternalSpamSyncService {
     details?: any;
   }> {
     const checks = [];
+    const sourcesArray = Array.from(this.sources.entries());
 
-    for (const [sourceId, source] of this.sources) {
+    for (const [sourceId, source] of sourcesArray) {
       if (source.enabled) {
         checks.push(this.checkNumberAgainstSource(phoneNumber, sourceId, source));
       }
@@ -228,8 +230,9 @@ export class ExternalSpamSyncService {
         .values({
           number: spamNumber.number,
           type: "blacklist",
-          reputationScore: Math.round((1 - spamNumber.confidence) * 100),
-          metadata: {
+          reputationScore: Math.round((1 - spamNumber.confidence) * 100).toString(),
+          description: `Spam reported by ${spamNumber.source}`,
+          callerIdInfo: {
             source: spamNumber.source,
             category: spamNumber.category,
             lastReported: spamNumber.lastReported?.toISOString(),
@@ -241,8 +244,9 @@ export class ExternalSpamSyncService {
           target: phoneNumbers.number,
           set: {
             type: "blacklist",
-            reputationScore: Math.round((1 - spamNumber.confidence) * 100),
-            metadata: {
+            reputationScore: Math.round((1 - spamNumber.confidence) * 100).toString(),
+            description: `Spam reported by ${spamNumber.source}`,
+            callerIdInfo: {
               source: spamNumber.source,
               category: spamNumber.category,
               lastReported: spamNumber.lastReported?.toISOString(),

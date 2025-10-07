@@ -142,8 +142,9 @@ class IVRChallengeService {
         .values({
           number: phoneNumber,
           type: "whitelist",
-          reputationScore: 80,
-          metadata: {
+          reputationScore: "80",
+          description: "Passed IVR challenge verification",
+          callerIdInfo: {
             source: "ivr_challenge",
             passedAt: new Date().toISOString(),
             temporary: true,
@@ -154,8 +155,9 @@ class IVRChallengeService {
           target: phoneNumbers.number,
           set: {
             type: "whitelist",
-            reputationScore: 80,
-            metadata: {
+            reputationScore: "80",
+            description: "Passed IVR challenge verification",
+            callerIdInfo: {
               source: "ivr_challenge",
               passedAt: new Date().toISOString(),
               temporary: true,
@@ -180,8 +182,9 @@ class IVRChallengeService {
         .values({
           number: phoneNumber,
           type: "blacklist",
-          reputationScore: 0,
-          metadata: {
+          reputationScore: "0",
+          description: "Failed IVR verification challenge",
+          callerIdInfo: {
             source: "ivr_challenge_failed",
             failedAt: new Date().toISOString(),
             reason: "Failed IVR verification challenge"
@@ -191,8 +194,9 @@ class IVRChallengeService {
           target: phoneNumbers.number,
           set: {
             type: "blacklist",
-            reputationScore: 0,
-            metadata: {
+            reputationScore: "0",
+            description: "Failed IVR verification challenge",
+            callerIdInfo: {
               source: "ivr_challenge_failed",
               failedAt: new Date().toISOString(),
               reason: "Failed IVR verification challenge"
@@ -226,7 +230,8 @@ class IVRChallengeService {
    */
   cleanupExpiredChallenges(): void {
     const now = new Date();
-    for (const [phoneNumber, challenge] of this.activeChallenges.entries()) {
+    const entries = Array.from(this.activeChallenges.entries());
+    for (const [phoneNumber, challenge] of entries) {
       if (now > challenge.expiresAt) {
         this.activeChallenges.delete(phoneNumber);
       }
