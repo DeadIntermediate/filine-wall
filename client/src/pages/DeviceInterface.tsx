@@ -50,7 +50,7 @@ export default function DeviceInterface() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">ScamShield Device Portal</h1>
+        <h1 className="text-3xl font-bold">FiLine Wall Device Portal</h1>
         <Button variant="outline">
           <Shield className="w-4 h-4 mr-2" />
           Protection Active
