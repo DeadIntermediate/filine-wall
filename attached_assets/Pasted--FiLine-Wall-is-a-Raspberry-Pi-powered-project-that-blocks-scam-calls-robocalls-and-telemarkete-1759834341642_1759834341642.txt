@@ -1,0 +1,156 @@
+**FiLine Wall** is a Raspberry Pi-powered project that blocks scam calls, robocalls, and telemarketers on traditional landlines using a USB modem. It uses blacklist/whitelist databases, pattern detection, probing detection, and even voice analysis (optional) to stop 99% of unwanted calls.
+
+---
+
+## 📦 System Architecture
+
+### 🧱 Hardware
+- Raspberry Pi 3/4/5
+- StarTech 56k USB Fax/Dial-up Modem (v.92)
+- Connected landline
+
+### 🧰 Software Stack
+- Python 3.x
+- pyserial / mgetty
+- SQLite3 or Redis
+- Optional: Flask, Whisper/Vosk, Discord.py
+
+---
+
+## 🛠️ Core Functional Features
+
+- 📞 Caller ID Parsing via AT Commands
+- 🛑 Blacklist & Whitelist Filtering
+- 🧠 Call Pattern Detection & Auto-Blocking
+- 🔒 Call Probing Defense (<5s calls)
+- 📲 Discord or Telegram Alerts
+- 🎯 Optional IVR Challenge ("Press 1 to Continue")
+- 🔄 Daily External Spam List Sync (Hiya, Nomorobo, TrueCaller, Tellows)
+- 📼 Optional Voicemail Logging & STT Transcription
+- 📊 Web Dashboard or CLI menu (optional)
+
+---
+
+## 🔁 Call Handling Logic
+
+1. Modem rings
+2. Caller ID parsed
+3. Check whitelist → ring
+4. Check blacklist → hang up
+5. Analyze call patterns
+6. If unknown → IVR or voicemail
+7. Log and alert
+
+---
+
+## 🧩 Component Breakdown
+
+### 🔌 Modem Interface
+- Device: `/dev/ttyUSB0`
+- Commands: `ATZ`, `AT+VCID=1`, `ATH`
+- Read CID lines: `NMBR`, `NAME`, `DATE`
+
+### 🧠 Filter Engine
+- Match against local whitelist/blacklist
+- Apply probing & frequency rules
+- Perform action (allow, block, voicemail, challenge)
+
+### 📥 Call Logging (SQLite)
+- `calls`, `whitelist`, `blacklist`, `call_logs` tables
+
+### 🔔 Alert System
+- Discord webhook or Telegram bot
+- Alert on blocked, flagged, or unknown callers
+
+---
+
+## 📑 Sample `config.yml`
+
+```yaml
+modem_device: /dev/ttyUSB0
+baud_rate: 9600
+caller_id_enabled: true
+min_call_duration: 5
+auto_block_threshold:
+  calls_per_day: 3
+  repeat_within_minutes: 15
+log_path: /var/log/filinewall/
+db_path: /opt/filinewall/filinewall.db
+discord:
+  enabled: true
+  webhook_url: "https://discord.com/api/webhooks/..."
+update_sources:
+  - hiya
+  - nomorobo
+  - tellows
+📂 Suggested Folder Structure
+arduino
+Copy code
+filinewall/
+├── config/
+│   └── config.yml
+├── database/
+│   ├── whitelist.db
+│   ├── blacklist.db
+│   └── filinewall.db
+├── scripts/
+│   ├── filinewall.py
+│   ├── call_parser.py
+│   ├── notifier.py
+│   └── call_analyzer.py
+├── logs/
+│   └── call_logs.log
+├── voicemails/
+│   └── [timestamp]_[number].wav
+├── dashboard/ (optional)
+│   └── app.py
+├── services/
+│   └── filinewall.service (systemd unit)
+└── README.md
+📈 Pattern Detection
+Auto-flag short-duration calls (<5s)
+
+Detect multiple attempts in short time
+
+Block spoofed area codes or number patterns
+
+Auto-quarantine suspicious numbers
+
+🧠 STT (Optional)
+Record voicemail WAVs
+
+Use Whisper or Vosk to transcribe
+
+Detect scam keywords like "warranty", "IRS", "free", "claim", "urgent"
+
+📋 Starting Task for AI Coding
+Write a Python script named filinewall.py that:
+
+Connects to /dev/ttyUSB0 with pyserial
+
+Sends ATZ and AT+VCID=1 to enable Caller ID
+
+Parses incoming CID output (NMBR, NAME, DATE)
+
+Checks if number is in blacklist.db (SQLite)
+
+If so, sends ATH to hang up
+
+Logs all attempts to filinewall.db
+
+Sends Discord alert for each blocked number
+
+✅ Project Goals
+Goal	Target
+Scam Block Rate	99%
+Call Probing Detection	✅
+Real-Time Alerts	✅
+Raspberry Pi + Modem Support	✅
+CLI or Dashboard Interface	✅
+STT Support (optional)	✅
+Easily Expandable	✅
+
+🧠 Name & Branding
+Project Name: FiLine Wall
+Tagline: “The Firewall for Your Phone Line”
+Short Command Alias: filinewall
