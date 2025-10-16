@@ -27,8 +27,11 @@ class CallDetector:
         self.session = requests.Session()
         self.modem = None
 
-        # Initialize encryption with auth token
-        self.encryption = DeviceEncryption(self.config["device"]["auth_token"])
+        # Initialize encryption with auth token and device ID
+        self.encryption = DeviceEncryption(
+            self.config["device"]["auth_token"],
+            self.config["device"]["id"]
+        )
 
         # Setup headers with basic auth token
         self.session.headers.update({

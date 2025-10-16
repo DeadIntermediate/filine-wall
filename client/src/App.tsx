@@ -8,6 +8,7 @@ import MasterInterface from "@/pages/MasterInterface";
 import DeviceInterface from "@/pages/DeviceInterface";
 import VerifyCaller from "@/pages/VerifyCaller";
 import { Layout } from "@/components/Layout";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 function App() {
   const { user, isLoading } = useAuth();
@@ -25,38 +26,40 @@ function App() {
   }
 
   return (
-    <ThemeProvider defaultTheme="system" storageKey="ui-theme">
-      <Switch>
-        {/* Public routes */}
-        <Route path="/auth/login" component={LoginPage} />
+    <ErrorBoundary>
+      <ThemeProvider defaultTheme="system" storageKey="ui-theme">
+        <Switch>
+          {/* Public routes */}
+          <Route path="/auth/login" component={LoginPage} />
 
-        {/* Protected routes */}
-        <Route>
-          <Layout>
-            <Switch>
-              {/* Master Interface (Admin) */}
-              {user?.role === 'admin' && (
-                <Switch>
-                  <Route path="/" component={MasterInterface} />
-                  <Route path="/verify" component={VerifyCaller} />
-                </Switch>
-              )}
+          {/* Protected routes */}
+          <Route>
+            <Layout>
+              <Switch>
+                {/* Master Interface (Admin) */}
+                {user?.role === 'admin' && (
+                  <Switch>
+                    <Route path="/" component={MasterInterface} />
+                    <Route path="/verify" component={VerifyCaller} />
+                  </Switch>
+                )}
 
-              {/* Device Interface (Regular Users) */}
-              {user?.role === 'user' && (
-                <Switch>
-                  <Route path="/" component={DeviceInterface} />
-                  <Route path="/verify" component={VerifyCaller} />
-                </Switch>
-              )}
+                {/* Device Interface (Regular Users) */}
+                {user?.role === 'user' && (
+                  <Switch>
+                    <Route path="/" component={DeviceInterface} />
+                    <Route path="/verify" component={VerifyCaller} />
+                  </Switch>
+                )}
 
-              {/* Fallback 404 */}
-              <Route component={NotFound} />
-            </Switch>
-          </Layout>
-        </Route>
-      </Switch>
-    </ThemeProvider>
+                {/* Fallback 404 */}
+                <Route component={NotFound} />
+              </Switch>
+            </Layout>
+          </Route>
+        </Switch>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

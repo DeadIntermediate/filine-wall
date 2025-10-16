@@ -4,10 +4,52 @@ import { setupVite, serveStatic, log } from "./vite";
 import { initializeScheduledTasks } from "./services/scheduledTasks";
 import { SpamDatabaseService } from "./services/spamDatabaseService";
 import { SpamDetectionService } from "./services/spamDetectionService";
+import { apiRateLimit } from "./middleware/rateLimit";
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+
+// Basic middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+
+// Trust proxy for rate limiting and IP detection
+app.set('trust proxy', 1);
+
+// CORS configuration for nginx proxy
+app.use((req, res, next) => {
+  const allowedOrigins = process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'];
+  const origin = req.headers.origin;
+  
+  if (allowedOrigins.includes(origin || '')) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '');
+  }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
+// Apply rate limiting to API routes
+app.use('/api/', apiRateLimit.middleware());
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  
+  // Remove X-Powered-By header
+  res.removeHeader('X-Powered-By');
+  
+  next();
+});
 
 app.use((req, res, next) => {
   const start = Date.now();

@@ -13,6 +13,39 @@ import { SpamDatabaseService } from "./services/spamDatabaseService";
 import { analyzeVoice, type VoiceAnalysisResult } from "./services/voiceAnalysisService";
 
 export function registerRoutes(app: Express): Server {
+  // Health check endpoint
+  app.get("/health", async (req, res) => {
+    try {
+      // Check database connectivity
+      const dbCheck = await db.select().from(users).limit(1);
+      const dbHealthy = Array.isArray(dbCheck);
+
+      const healthStatus = {
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        version: process.env.npm_package_version || "1.0.0",
+        services: {
+          database: dbHealthy ? "healthy" : "unhealthy",
+          api: "healthy"
+        },
+        uptime: process.uptime(),
+        memory: {
+          used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+          total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
+        }
+      };
+
+      const statusCode = dbHealthy ? 200 : 503;
+      res.status(statusCode).json(healthStatus);
+    } catch (error) {
+      res.status(503).json({
+        status: "unhealthy",
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // Auth routes (public)
   app.post("/api/auth/login", async (req, res) => {
     try {
