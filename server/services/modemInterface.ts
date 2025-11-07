@@ -5,12 +5,19 @@ import { deviceConfigurations } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { SpamDetectionService } from "./spamDetectionService";
 import { CallCachingService } from "./callCachingService";
+import { 
+  type ModemProfile, 
+  getModemProfile, 
+  detectModemModel,
+  AT_COMMANDS 
+} from "../config/modemProfiles";
 
 interface ModemConfig {
   deviceId: string;
   port: string;  // USB port e.g., '/dev/ttyUSB0'
-  baudRate: number;
+  baudRate?: number;  // Optional, will use profile default
   developmentMode?: boolean;
+  modemModel?: string;  // Optional: 'USR5637', 'STARTECH_V92', 'GENERIC_V92'
 }
 
 export class ModemInterface extends EventEmitter {
@@ -24,28 +31,35 @@ export class ModemInterface extends EventEmitter {
   private readonly MAX_RETRIES = 3;
   private developmentMode: boolean;
   private spamModelInitialized: boolean = false;
+  private modemProfile: ModemProfile;
+  private detectedModel: string = 'GENERIC_V92';
 
   constructor(config: ModemConfig) {
     super();
     this.deviceId = config.deviceId;
     this.developmentMode = config.developmentMode || false;
+    
+    // Get modem profile
+    const modelId = config.modemModel || 'GENERIC_V92';
+    this.modemProfile = getModemProfile(modelId);
+    this.detectedModel = modelId;
 
     if (!this.developmentMode) {
       this.port = new SerialPort({
         path: config.port,
-        baudRate: config.baudRate || 115200,
+        baudRate: config.baudRate || this.modemProfile.baudRate,
+        dataBits: this.modemProfile.dataBits,
+        stopBits: this.modemProfile.stopBits,
+        parity: this.modemProfile.parity,
+        rtscts: this.modemProfile.flowControl.rtscts,
+        xon: this.modemProfile.flowControl.xon,
+        xoff: this.modemProfile.flowControl.xoff,
         autoOpen: false,
-        dataBits: 8,
-        stopBits: 1,
-        parity: 'none',
-        rtscts: true,
-        xon: true,
-        xoff: true
       });
       this.setupEventListeners();
     } else {
       this.port = null;
-      console.log('ModemInterface running in development mode');
+      console.log(`ModemInterface running in development mode (Profile: ${this.modemProfile.name})`);
     }
   }
 
@@ -63,7 +77,7 @@ export class ModemInterface extends EventEmitter {
   async initialize(): Promise<boolean> {
     try {
       if (this.developmentMode) {
-        console.log('Development mode: Simulating modem initialization');
+        console.log(`Development mode: Simulating modem initialization (${this.modemProfile.name})`);
         this.initialized = true;
         // Initialize spam detection model
         await SpamDetectionService.ensureModelInitialized();
@@ -72,12 +86,27 @@ export class ModemInterface extends EventEmitter {
       }
 
       await this.openPort();
+      
+      // Try to detect modem model if not specified
+      if (this.detectedModel === 'GENERIC_V92') {
+        try {
+          const detectedModelId = await detectModemModel(this.sendCommand.bind(this));
+          if (detectedModelId !== 'GENERIC_V92') {
+            this.detectedModel = detectedModelId;
+            this.modemProfile = getModemProfile(detectedModelId);
+            console.log(`Detected modem model: ${this.modemProfile.name}`);
+          }
+        } catch (error) {
+          console.log('Could not auto-detect modem model, using configured profile');
+        }
+      }
+      
       await this.configureModem();
       // Initialize spam detection model
       await SpamDetectionService.ensureModelInitialized();
       this.spamModelInitialized = true;
       this.initialized = true;
-      console.log('Modem initialized successfully');
+      console.log(`Modem initialized successfully: ${this.modemProfile.name}`);
       return true;
     } catch (error) {
       console.error('Modem initialization failed:', error);
@@ -103,28 +132,27 @@ export class ModemInterface extends EventEmitter {
   }
 
   private async configureModem(): Promise<void> {
-    // Standard V.92 modem initialization sequence
-    // Compatible with USRobotics 5637 and StarTech 56k USB modems
-    const initCommands = [
-      { cmd: USR_COMMANDS.RESET, delay: 1000 },
-      { cmd: USR_COMMANDS.FACTORY_RESET, delay: 1000 },
-      { cmd: USR_COMMANDS.CALLER_ID, delay: 500 },
-      { cmd: USR_COMMANDS.VOICE_MODE, delay: 500 },
-      { cmd: USR_COMMANDS.NO_AUTO_ANSWER, delay: 500 },
-      { cmd: USR_COMMANDS.FLOW_CONTROL, delay: 500 },
-      { cmd: USR_COMMANDS.SPEAKER_OFF, delay: 500 },
-      { cmd: USR_COMMANDS.SAVE_SETTINGS, delay: 1000 }
-    ];
+    console.log(`Configuring modem with profile: ${this.modemProfile.name}`);
+    
+    // Use modem profile's initialization sequence
+    const initCommands = this.modemProfile.initSequence;
 
-    for (const { cmd, delay } of initCommands) {
+    for (const { cmd, description, delay, optional } of initCommands) {
       try {
+        console.log(`Executing: ${description} (${cmd})`);
         await this.sendCommand(cmd);
         await new Promise(resolve => setTimeout(resolve, delay));
       } catch (error) {
+        if (optional) {
+          console.warn(`Optional command failed: ${cmd} - ${description}`);
+          continue;
+        }
         console.error(`Failed to execute command ${cmd}:`, error);
         throw error;
       }
     }
+    
+    console.log('Modem configuration completed successfully');
   }
 
   private async sendCommand(command: string): Promise<string> {
@@ -182,21 +210,34 @@ export class ModemInterface extends EventEmitter {
   }
 
   private async parseModemResponse(message: string): Promise<void> {
-    // USRobotics specific response parsing
-    if (message.startsWith('NMBR=')) {
-      const phoneNumber = message.split('=')[1].trim();
-      await this.handleIncomingCall(phoneNumber);
+    const patterns = this.modemProfile.responsePatterns;
+    
+    // Check for caller ID using modem-specific pattern
+    if (message.startsWith(patterns.callerIdPrefix)) {
+      const phoneNumber = message.split('=')[1]?.trim();
+      if (phoneNumber) {
+        await this.handleIncomingCall(phoneNumber);
+      }
     }
-    else if (message.includes('RING')) {
+    // Check for caller name if supported
+    else if (patterns.callerNamePrefix && message.startsWith(patterns.callerNamePrefix)) {
+      const callerName = message.split('=')[1]?.trim();
+      this.emit('caller-name', callerName);
+    }
+    // Check for ring
+    else if (message.includes(patterns.ringPattern)) {
       this.emit('ring');
     }
-    else if (message.includes('NO CARRIER')) {
+    // Check for hangup/disconnect
+    else if (message.includes(patterns.hangupPattern)) {
       this.callInProgress = false;
       this.emit('hangup');
     }
-    else if (message.includes('BUSY')) {
+    // Check for busy
+    else if (message.includes(patterns.busyPattern)) {
       this.emit('busy');
     }
+    // Check for no dial tone
     else if (message.includes('NO DIALTONE')) {
       this.emit('error', new Error('No dial tone detected'));
       await this.attemptRecovery();
@@ -229,7 +270,7 @@ export class ModemInterface extends EventEmitter {
 
       if (cachedResult) {
         if (cachedResult.isSpam) {
-          await this.sendCommand(USR_COMMANDS.HANG_UP);
+          await this.sendCommand(AT_COMMANDS.HANG_UP);
           this.emit('call-blocked', {
             phoneNumber,
             reason: 'cached_spam',
@@ -256,8 +297,11 @@ export class ModemInterface extends EventEmitter {
         metadata: {
           deviceId: this.deviceId,
           callType: 'landline',
-          modemType: 'USRobotics_5637',
-          developmentMode: this.developmentMode
+          modemType: this.detectedModel,
+          modemName: this.modemProfile.name,
+          modemManufacturer: this.modemProfile.manufacturer,
+          developmentMode: this.developmentMode,
+          callerIdSupport: this.modemProfile.features.callerIdSupport,
         }
       };
 
@@ -273,7 +317,7 @@ export class ModemInterface extends EventEmitter {
         });
 
         if (spamPrediction.isSpam && spamPrediction.confidence > 0.7) {
-          await this.sendCommand(USR_COMMANDS.HANG_UP);
+          await this.sendCommand(AT_COMMANDS.HANG_UP);
           this.emit('call-blocked', {
             phoneNumber,
             reason: 'spam_detected',
@@ -283,7 +327,7 @@ export class ModemInterface extends EventEmitter {
         } else if (spamPrediction.confidence < 0.6 || !cachedResult) {
           const screeningResult = await this.screenCall(phoneNumber);
           if (screeningResult === 'blocked') {
-            await this.sendCommand(USR_COMMANDS.HANG_UP);
+            await this.sendCommand(AT_COMMANDS.HANG_UP);
             this.emit('call-blocked', {
               phoneNumber,
               reason: 'failed_screening',
@@ -347,8 +391,8 @@ export class ModemInterface extends EventEmitter {
   private async screenCall(phoneNumber: string): Promise<'blocked' | 'allowed'> {
     try {
       // Answer call for screening
-      await this.sendCommand(USR_COMMANDS.SPEAKER_ON);
-      await this.sendCommand(USR_COMMANDS.ANSWER);
+      await this.sendCommand(AT_COMMANDS.SPEAKER_ON);
+      await this.sendCommand(AT_COMMANDS.ANSWER);
 
       // Emit event for call screening start
       this.emit('call-screening', {
@@ -384,7 +428,7 @@ export class ModemInterface extends EventEmitter {
 
     } catch (error) {
       console.error('Error screening call:', error);
-      await this.sendCommand(USR_COMMANDS.HANG_UP);
+      await this.sendCommand(AT_COMMANDS.HANG_UP);
       this.emit('call-screening', {
         phoneNumber,
         status: 'screening_failed',
@@ -446,6 +490,12 @@ export class ModemInterface extends EventEmitter {
     retryCount: number;
     portOpen: boolean;
     developmentMode: boolean;
+    modemProfile: {
+      name: string;
+      manufacturer: string;
+      model: string;
+      callerIdSupport: boolean;
+    };
   }> {
     return {
       initialized: this.initialized,
@@ -453,7 +503,13 @@ export class ModemInterface extends EventEmitter {
       lastCommand: this.lastCommand,
       retryCount: this.retryCount,
       portOpen: this.developmentMode ? false : (this.port?.isOpen || false),
-      developmentMode: this.developmentMode
+      developmentMode: this.developmentMode,
+      modemProfile: {
+        name: this.modemProfile.name,
+        manufacturer: this.modemProfile.manufacturer,
+        model: this.detectedModel,
+        callerIdSupport: this.modemProfile.features.callerIdSupport,
+      }
     };
   }
 
@@ -470,58 +526,68 @@ export class ModemInterface extends EventEmitter {
   }
 }
 
-// USRobotics specific AT commands
-const USR_COMMANDS = {
-  RESET: 'ATZ',
-  FACTORY_RESET: 'AT&F',
-  CALLER_ID: 'AT+VCID=1',
-  VOICE_MODE: 'AT+FCLASS=0',
-  NO_AUTO_ANSWER: 'ATS0=0',
-  FLOW_CONTROL: 'AT&K3',
-  SAVE_SETTINGS: 'AT&W',
-  SPEAKER_ON: 'ATM1',
-  SPEAKER_OFF: 'ATM0',
-  HANG_UP: 'ATH',
-  ANSWER: 'ATA'
-};
-
+// Test function for development
 async function testModem() {
   const modem = new ModemInterface({
     deviceId: 'device_123',
     port: '/dev/ttyUSB0',
-    baudRate: 115200,
-    developmentMode: true // Set to true for development testing
+    developmentMode: true, // Set to true for development testing
+    modemModel: 'USR5637'  // Specify USRobotics USR5637 model
   });
 
-  modem.on('call-blocked', (data) => {
+  modem.on('call-blocked', (data: any) => {
     console.log('Call blocked:', data);
   });
 
-  modem.on('call-allowed', (data) => {
+  modem.on('call-allowed', (data: any) => {
     console.log('Call allowed:', data);
   });
 
-  modem.on('call-screening', (data) => {
+  modem.on('call-screening', (data: any) => {
     console.log('Call screening:', data);
   });
 
-  modem.on('error', (error) => {
+  modem.on('error', (error: Error) => {
     console.error('Modem error:', error);
   });
 
+  modem.on('caller-name', (name: string) => {
+    console.log('Caller name:', name);
+  });
 
   const initialized = await modem.initialize();
   if (initialized) {
     const status = await modem.getStatus();
     console.log('Modem Status:', status);
+    console.log(`\nModem Profile: ${status.modemProfile.name}`);
+    console.log(`Manufacturer: ${status.modemProfile.manufacturer}`);
+    console.log(`Caller ID Support: ${status.modemProfile.callerIdSupport ? 'Yes' : 'No'}`);
+    
     if (!status.developmentMode) {
       await modem.disconnect();
     }
-    //Simulate a call in development mode
-    if(status.developmentMode){
-      modem.simulateIncomingCall('1234567890');
+    
+    // Simulate incoming calls in development mode
+    if (status.developmentMode) {
+      console.log('\n--- Testing Call Scenarios ---');
+      
+      console.log('\n1. Testing legitimate call:');
+      await modem.simulateIncomingCall('+14155551234');
+      
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      console.log('\n2. Testing spam pattern (ends with 0000):');
+      await modem.simulateIncomingCall('+15551230000');
+      
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      console.log('\n3. Testing another spam pattern (starts with +1555):');
+      await modem.simulateIncomingCall('+15551234567');
     }
   }
 }
+
+// Uncomment to run test
+// testModem().catch(console.error);
 
 testModem();

@@ -83,36 +83,52 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
+    log("Starting FiLine Wall server...");
+    
     // Initialize FCC database on startup
+    log("Initializing spam databases...");
     await SpamDatabaseService.refreshDatabase()
+      .then(() => log("FCC database initialized successfully"))
       .catch(error => {
-        console.error("Initial FCC database refresh failed:", error);
-        // Continue even if FCC database fails - it's not critical for core functionality
+        log(`Warning: Initial FCC database refresh failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
+        log("Server will continue with existing database or create new one on first use");
       });
 
     // Initialize spam detection model
+    log("Loading AI spam detection model...");
     await SpamDetectionService.loadModel()
+      .then(() => log("Spam detection model loaded successfully"))
       .catch(error => {
-        console.error("Failed to initialize spam detection model:", error);
-        // Continue without AI model, will use traditional methods
+        log(`Warning: Failed to initialize spam detection model - ${error instanceof Error ? error.message : 'Unknown error'}`);
+        log("Server will use traditional detection methods without AI enhancement");
       });
 
     // Start the initial model training in the background
-    SpamDetectionService.trainModel().catch(error => {
-      console.error("Initial model training failed:", error);
-    });
+    SpamDetectionService.trainModel()
+      .then(() => log("Initial model training completed"))
+      .catch(error => {
+        log(`Warning: Initial model training failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
+      });
 
     const server = registerRoutes(app);
 
     // Initialize scheduled tasks (including FCC database updates)
+    log("Setting up scheduled tasks...");
     initializeScheduledTasks();
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
 
-      console.error("Server error:", err);
-      res.status(status).json({ message });
+      log(`Server error [${status}]: ${message}`);
+      if (err.stack && process.env.NODE_ENV === 'development') {
+        log(err.stack);
+      }
+      
+      res.status(status).json({ 
+        message,
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+      });
     });
 
     // importantly only setup vite in development and after
@@ -128,11 +144,17 @@ app.use((req, res, next) => {
     // this serves both the API and the client
     const PORT = 5000;
     server.listen(PORT, "0.0.0.0", () => {
-      log(`serving on port ${PORT}`);
-      log("AI Spam Detection: Initialized and ready");
+      log(`✓ Server running on port ${PORT}`);
+      log(`✓ AI Spam Detection: ${SpamDetectionService ? 'Active' : 'Fallback mode'}`);
+      log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+      log("Ready to accept connections");
     });
   } catch (error) {
-    console.error("Failed to start server:", error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error("❌ Failed to start server:", errorMessage);
+    if (error instanceof Error && error.stack) {
+      console.error(error.stack);
+    }
     process.exit(1);
   }
 })();

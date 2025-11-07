@@ -4,6 +4,9 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "setup": "node -e \"console.log('Running setup...')\" && npm install && npm run db:push",
+    "start:dev": "tsx server/index.ts",
+    "start:prod": "NODE_ENV=production node dist/index.js",
     "dev": "tsx server/index.ts",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
@@ -20,11 +23,14 @@
     "db:generate": "drizzle-kit generate:pg",
     "db:migrate": "drizzle-kit up:pg",
     "db:studio": "drizzle-kit studio",
+    "db:reset": "npm run db:push && echo 'Database reset complete'",
     "security:audit": "npm audit",
     "security:check": "npm audit --audit-level high",
     "prepare": "husky install",
     "clean": "rimraf dist build node_modules/.cache",
-    "healthcheck": "curl -f http://localhost:5000/health || exit 1"
+    "healthcheck": "curl -f http://localhost:5000/health || exit 1",
+    "prestart": "node -e \"if(!require('fs').existsSync('.env')){console.error('ERROR: .env file not found! Run setup.sh or setup.ps1 first.');process.exit(1);}\"",
+    "predev": "node -e \"if(!require('fs').existsSync('.env')){console.error('ERROR: .env file not found! Run setup.sh or setup.ps1 first.');process.exit(1);}\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

@@ -4,13 +4,14 @@ import { authenticate, requireAdmin } from "./middleware/auth";
 import { AuthService } from "./services/authService";
 import { db } from "@db";
 import { desc, eq, sql } from "drizzle-orm";
-import { phoneNumbers, callLogs, spamReports, voicePatterns, featureSettings, deviceConfigurations, deviceRegistrations } from "@db/schema";
+import { users, phoneNumbers, callLogs, spamReports, voicePatterns, featureSettings, deviceConfigurations, deviceRegistrations } from "@db/schema";
 import { screenCall, logCall } from "./services/callScreening";
 import { calculateReputationScore } from "./services/reputationScoring";
 import { verifyCode, getVerificationAttempts } from "./services/callerVerification";
 import { randomBytes, createHash } from "crypto";
 import { SpamDatabaseService } from "./services/spamDatabaseService";
 import { analyzeVoice, type VoiceAnalysisResult } from "./services/voiceAnalysisService";
+import { getEncryptionService } from "./services/encryptionService";
 
 export function registerRoutes(app: Express): Server {
   // Health check endpoint
@@ -438,8 +439,19 @@ export function registerRoutes(app: Express): Server {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // TODO: Add server-side decryption when implementing end-to-end encryption
-    const { phoneNumber } = JSON.parse(encryptedData);
+    // Decrypt device data if encryption is enabled
+    const encryption = getEncryptionService();
+    let phoneNumber: string;
+    
+    try {
+      const decryptedData = device.encryptionEnabled 
+        ? encryption.decryptDeviceData(encryptedData)
+        : encryptedData;
+      const parsedData = JSON.parse(decryptedData);
+      phoneNumber = parsedData.phoneNumber;
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid encrypted data" });
+    }
 
     if (!phoneNumber) {
       return res.status(400).json({ message: "Phone number is required" });
@@ -449,8 +461,12 @@ export function registerRoutes(app: Express): Server {
       const result = await screenCall(phoneNumber);
       await logCall(phoneNumber, { ...result, deviceId });
 
-      // TODO: Add server-side encryption when implementing end-to-end encryption
-      res.json({ data: JSON.stringify(result) });
+      // Encrypt response if device encryption is enabled
+      const responseData = device.encryptionEnabled
+        ? encryption.encryptDeviceData(JSON.stringify(result))
+        : JSON.stringify(result);
+      
+      res.json({ data: responseData });
     } catch (error) {
       console.error("Error screening call:", error);
       res.status(500).json({ message: "Error screening call" });
@@ -505,8 +521,18 @@ export function registerRoutes(app: Express): Server {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // TODO: Add server-side decryption when implementing end-to-end encryption
-    const heartbeatData = JSON.parse(encryptedData);
+    // Decrypt heartbeat data if encryption is enabled
+    const encryption = getEncryptionService();
+    let heartbeatData: any;
+    
+    try {
+      const decryptedData = device.encryptionEnabled
+        ? encryption.decryptDeviceData(encryptedData)
+        : encryptedData;
+      heartbeatData = JSON.parse(decryptedData);
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid encrypted data" });
+    }
 
     // Update device status and last heartbeat
     const [updated] = await db
@@ -518,8 +544,12 @@ export function registerRoutes(app: Express): Server {
       .where(eq(deviceConfigurations.deviceId, deviceId))
       .returning();
 
-    // TODO: Add server-side encryption when implementing end-to-end encryption
-    res.json({ data: JSON.stringify(updated) });
+    // Encrypt response if device encryption is enabled
+    const responseData = device.encryptionEnabled
+      ? encryption.encryptDeviceData(JSON.stringify(updated))
+      : JSON.stringify(updated);
+      
+    res.json({ data: responseData });
   });
 
   // Get verification status (moved to /api/admin)
