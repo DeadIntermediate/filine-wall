@@ -60,6 +60,7 @@ node setup-wizard.js
 
 ### Supported Modems
 - USRobotics 5637 USB Fax Modem
+- Grandstream HT802 2-Port Analog Telephone Adapter (VoIP ATA)
 - StarTech 56k USB Dial-up and Fax Modem V.92 External
 - Any V.92 compatible USB modem with Caller ID support
 
@@ -511,6 +512,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Supported Hardware
 - USRobotics 5637 USB Fax Modem
+- Grandstream HT802 2-Port Analog Telephone Adapter (VoIP ATA)
 - StarTech 56k USB Dial-up and Fax Modem V.92 External
 
 ## How It Works

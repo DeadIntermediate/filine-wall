@@ -136,6 +136,55 @@ export const STARTECH_V92_PROFILE: ModemProfile = {
 };
 
 /**
+ * Grandstream HT802 v2 Port Analog Adapter
+ * VoIP ATA with FXS ports supporting Caller ID and call screening
+ * Note: Requires configuration via web interface for SIP/VoIP settings
+ */
+export const GRANDSTREAM_HT802_PROFILE: ModemProfile = {
+  name: 'Grandstream HT802',
+  manufacturer: 'Grandstream',
+  model: 'HT802',
+  baudRate: 115200,
+  dataBits: 8,
+  stopBits: 1,
+  parity: 'none',
+  flowControl: {
+    rtscts: true,
+    xon: true,
+    xoff: true,
+  },
+  initSequence: [
+    { cmd: 'ATZ', description: 'Reset to default state', delay: 1000 },
+    { cmd: 'AT&F', description: 'Load factory defaults', delay: 1000 },
+    { cmd: 'ATE0', description: 'Disable command echo', delay: 300 },
+    { cmd: 'ATQ0', description: 'Enable result codes', delay: 300 },
+    { cmd: 'ATV1', description: 'Verbose result codes', delay: 300 },
+    { cmd: 'AT+VCID=1', description: 'Enable Caller ID detection', delay: 500 },
+    { cmd: 'AT#CLS=0', description: 'Set to voice/data mode', delay: 500 },
+    { cmd: 'ATS0=0', description: 'Disable auto-answer', delay: 300 },
+    { cmd: 'AT&K3', description: 'Enable RTS/CTS flow control', delay: 300 },
+    { cmd: 'ATX4', description: 'Enable extended call progress', delay: 300 },
+    { cmd: 'ATM0', description: 'Speaker off', delay: 300 },
+    { cmd: 'AT+CLIP=1', description: 'Enable calling line identification', delay: 500 },
+    { cmd: 'AT&W', description: 'Save settings to NVRAM', delay: 1000 },
+  ],
+  features: {
+    callerIdSupport: true,
+    voiceMode: true,
+    dtmfDetection: true,
+    callWaiting: true,
+    distinctiveRing: true,
+  },
+  responsePatterns: {
+    callerIdPrefix: 'NMBR=',
+    callerNamePrefix: 'NAME=',
+    ringPattern: 'RING',
+    hangupPattern: 'NO CARRIER',
+    busyPattern: 'BUSY',
+  },
+};
+
+/**
  * Generic V.92 Modem Profile
  * Fallback for other V.92 compatible modems
  */
@@ -184,6 +233,7 @@ export const GENERIC_V92_PROFILE: ModemProfile = {
 export const MODEM_PROFILES: Record<string, ModemProfile> = {
   USR5637: USR5637_PROFILE,
   STARTECH_V92: STARTECH_V92_PROFILE,
+  GRANDSTREAM_HT802: GRANDSTREAM_HT802_PROFILE,
   GENERIC_V92: GENERIC_V92_PROFILE,
 };
 
@@ -282,6 +332,10 @@ export async function detectModemModel(sendCommand: (cmd: string) => Promise<str
       return 'STARTECH_V92';
     }
 
+    if (manufacturer.includes('Grandstream') || model.includes('HT802')) {
+      return 'GRANDSTREAM_HT802';
+    }
+
     // Default to generic V.92 profile
     return 'GENERIC_V92';
   } catch (error) {
@@ -307,6 +361,7 @@ export default {
   AT_COMMANDS,
   USR5637_PROFILE,
   STARTECH_V92_PROFILE,
+  GRANDSTREAM_HT802_PROFILE,
   GENERIC_V92_PROFILE,
   detectModemModel,
   getModemProfile,

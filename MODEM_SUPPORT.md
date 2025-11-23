@@ -20,6 +20,27 @@ FiLine Wall now includes comprehensive support for multiple USB modem models wit
 
 **Why Recommended**: Industry-standard modem with excellent Caller ID support, reliable performance, and comprehensive AT command set.
 
+### ✅ Grandstream HT802 v2 Port Analog Adapter
+- **Full Name**: Grandstream HT802 2-Port Analog Telephone Adapter
+- **Type**: VoIP ATA (Analog Telephone Adapter) with FXS ports
+- **Baud Rate**: 115200 bps
+- **Features**:
+  - ✅ Caller ID detection (NMBR + NAME)
+  - ✅ Voice mode support
+  - ✅ DTMF detection
+  - ✅ Call waiting support
+  - ✅ Distinctive ring support
+  - ✅ Hardware flow control (RTS/CTS)
+  - ✅ Calling Line Identification (CLIP)
+  - ✅ Dual FXS ports (2 lines)
+
+**Why Use HT802**: Ideal for VoIP environments. Connects to SIP/VoIP services and provides analog phone line interfaces. Requires web-based configuration for SIP/VoIP settings before use.
+
+**Setup Notes**: 
+- Configure SIP account via web interface (default IP: DHCP or 192.168.2.1)
+- Enable Caller ID on both FXS ports in the web GUI
+- Connect FiLine to one of the FXS ports via RJ11
+
 ### ✅ StarTech USB56KEMH2
 - **Full Name**: StarTech 56k USB V.92 External Fax Modem
 - **Type**: V.92 56K External USB Modem  
@@ -72,7 +93,7 @@ You can manually specify the modem model:
 const modem = new ModemInterface({
   deviceId: 'device_123',
   port: '/dev/ttyUSB0',
-  modemModel: 'USR5637',  // Options: 'USR5637', 'STARTECH_V92', 'GENERIC_V92'
+  modemModel: 'USR5637',  // Options: 'USR5637', 'STARTECH_V92', 'GRANDSTREAM_HT802', 'GENERIC_V92'
   developmentMode: false
 });
 ```
@@ -108,6 +129,40 @@ await modem.screenCall(phoneNumber);
 
 ---
 
+## Grandstream HT802 Specific Features
+
+### VoIP Integration
+The HT802 is a VoIP Analog Telephone Adapter that bridges SIP/VoIP services to analog phone interfaces:
+
+**Initial Setup Required**:
+1. Connect HT802 to your network (Ethernet)
+2. Access web interface (default: DHCP-assigned IP or 192.168.2.1)
+3. Configure SIP account settings for your VoIP provider
+4. Enable Caller ID on both FXS ports
+5. Connect FiLine to FXS port 1 or 2 via RJ11 cable
+
+### Dual Port Support
+- **FXS Port 1**: Primary line for call screening
+- **FXS Port 2**: Secondary line or passthrough for legitimate calls
+
+### Web Configuration
+Access the HT802 web interface to configure:
+- SIP account credentials
+- Caller ID format (FSK or DTMF)
+- Call waiting settings
+- DTMF mode
+- Codec preferences
+
+### Recommended Settings for FiLine
+```
+Caller ID Scheme: Bellcore(FSK)
+Enable Call Waiting Caller ID: Yes
+DTMF Payload Type: 101
+Preferred Vocoder: PCMU/PCMA
+```
+
+---
+
 ## Initialization Process
 
 ### USR5637 Initialization Sequence
@@ -124,6 +179,23 @@ await modem.screenCall(phoneNumber);
 10. AT&K3       - Enable RTS/CTS flow control
 11. ATX4        - Enable all call progress detection
 12. ATM0        - Speaker off
+13. AT&W        - Save settings to NVRAM
+```
+
+### Grandstream HT802 Initialization Sequence
+```
+1. ATZ          - Reset to default state
+2. AT&F         - Load factory defaults
+3. ATE0         - Disable command echo
+4. ATQ0         - Enable result codes
+5. ATV1         - Verbose result codes
+6. AT+VCID=1    - Enable Caller ID detection
+7. AT#CLS=0     - Set to voice/data mode
+8. ATS0=0       - Disable auto-answer
+9. AT&K3        - Enable RTS/CTS flow control
+10. ATX4        - Enable extended call progress
+11. ATM0        - Speaker off
+12. AT+CLIP=1   - Enable calling line identification
 13. AT&W        - Save settings to NVRAM
 ```
 

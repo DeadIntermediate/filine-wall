@@ -17,7 +17,7 @@ interface ModemConfig {
   port: string;  // USB port e.g., '/dev/ttyUSB0'
   baudRate?: number;  // Optional, will use profile default
   developmentMode?: boolean;
-  modemModel?: string;  // Optional: 'USR5637', 'STARTECH_V92', 'GENERIC_V92'
+  modemModel?: string;  // Optional: 'USR5637', 'STARTECH_V92', 'GRANDSTREAM_HT802', 'GENERIC_V92'
 }
 
 export class ModemInterface extends EventEmitter {
@@ -121,7 +121,7 @@ export class ModemInterface extends EventEmitter {
     if (this.developmentMode) return;
 
     return new Promise((resolve, reject) => {
-      this.port!.open((err) => {
+      this.port!.open((err: Error | null) => {
         if (err) {
           reject(new Error(`Failed to open port: ${err.message}`));
         } else {
@@ -183,7 +183,7 @@ export class ModemInterface extends EventEmitter {
       };
 
       this.port?.on('data', handleResponse);
-      this.port?.write(command + '\r\n', (err) => {
+      this.port?.write(command + '\r\n', (err: Error | null | undefined) => {
         if (err) {
           clearTimeout(timeout);
           this.port?.removeListener('data', handleResponse);
