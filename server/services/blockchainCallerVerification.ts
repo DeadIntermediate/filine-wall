@@ -6,6 +6,7 @@
 import { db } from "@db";
 import { phoneNumbers } from "@db/schema";
 import { eq } from "drizzle-orm";
+import { logger } from '../utils/logger';
 
 interface CallerRegistration {
   phoneNumber: string;
@@ -80,7 +81,7 @@ export class BlockchainCallerVerification {
         }
       };
     } catch (error) {
-      console.error('Blockchain verification error:', error);
+      logger.error('Blockchain verification failed', error as Error, 'BlockchainVerification');
       return {
         verified: false,
         reputation: 0,
@@ -108,7 +109,7 @@ export class BlockchainCallerVerification {
       const data = await response.json();
       return data as CallerRegistration;
     } catch (error) {
-      console.error('Failed to fetch blockchain registration:', error);
+      logger.error('Failed to fetch blockchain registration', error as Error, 'BlockchainVerification', { phoneNumber });
       return null;
     }
   }
@@ -160,7 +161,7 @@ export class BlockchainCallerVerification {
       const data = await response.json();
       return data.count || 0;
     } catch (error) {
-      console.error('Failed to fetch complaints:', error);
+      logger.error('Failed to fetch complaints', error as Error, 'BlockchainVerification', { phoneNumber });
       return 0;
     }
   }
@@ -240,7 +241,7 @@ export class BlockchainCallerVerification {
   }> {
     try {
       if (this.developmentMode) {
-        console.log('Development mode: Would report scam to blockchain:', phoneNumber, evidence);
+        logger.info('Development mode: Would report scam to blockchain', 'BlockchainVerification', { phoneNumber, evidence });
         return {
           success: true,
           txHash: '0x' + Math.random().toString(16).substring(2)
@@ -267,7 +268,7 @@ export class BlockchainCallerVerification {
         txHash: data.txHash
       };
     } catch (error) {
-      console.error('Failed to report to blockchain:', error);
+      logger.error('Failed to report to blockchain', error as Error, 'BlockchainVerification', { phoneNumber });
       return {
         success: false
       };

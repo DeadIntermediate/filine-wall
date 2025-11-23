@@ -15,6 +15,8 @@
  * 10. Quantum-Resistant Authentication
  */
 
+import { logger } from '../utils/logger';
+
 export interface AdvancedDetectionResult {
   overallRiskScore: number;
   confidence: number;

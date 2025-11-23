@@ -7,6 +7,7 @@
 import { db } from "@db";
 import { phoneNumbers } from "@db/schema";
 import { eq } from "drizzle-orm";
+import { logger } from '../utils/logger';
 
 interface SocialPlatformResult {
   found: boolean;
@@ -90,7 +91,7 @@ export class SocialNetworkValidator {
         confidence
       };
     } catch (error) {
-      console.error('Social validation error:', error);
+      logger.error('Social validation failed', error as Error, 'SocialNetworkValidator', { phoneNumber });
       return {
         hasOnlinePresence: false,
         platforms: [],
@@ -150,7 +151,7 @@ export class SocialNetworkValidator {
 
       return { found: false, verified: false };
     } catch (error) {
-      console.error('LinkedIn check error:', error);
+      logger.error('LinkedIn check error:', error as Error, 'LinkedIn check error:'.split(' ')[0]);
       return { found: false, verified: false };
     }
   }
@@ -192,7 +193,7 @@ export class SocialNetworkValidator {
 
       return { found: false, verified: false };
     } catch (error) {
-      console.error('Facebook check error:', error);
+      logger.error('Facebook check error:', error as Error, 'Facebook check error:'.split(' ')[0]);
       return { found: false, verified: false };
     }
   }
@@ -237,7 +238,7 @@ export class SocialNetworkValidator {
 
       return { found: false, verified: false };
     } catch (error) {
-      console.error('Twitter check error:', error);
+      logger.error('Twitter check error:', error as Error, 'Twitter check error:'.split(' ')[0]);
       return { found: false, verified: false };
     }
   }
@@ -289,7 +290,7 @@ export class SocialNetworkValidator {
 
       return { found: false, verified: false };
     } catch (error) {
-      console.error('Google Business check error:', error);
+      logger.error('Google Business check error:', error as Error, 'Google Business check error:'.split(' ')[0]);
       return { found: false, verified: false };
     }
   }
@@ -330,7 +331,7 @@ export class SocialNetworkValidator {
 
       return { found: false, verified: false };
     } catch (error) {
-      console.error('Instagram check error:', error);
+      logger.error('Instagram check error:', error as Error, 'Instagram check error:'.split(' ')[0]);
       return { found: false, verified: false };
     }
   }

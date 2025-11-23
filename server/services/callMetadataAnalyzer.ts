@@ -4,6 +4,8 @@
  * Detects spoofing attempts and suspicious call patterns
  */
 
+import { logger } from '../utils/logger';
+
 interface SIPHeaderAnalysis {
   hasAnomalies: boolean;
   anomalies: string[];
@@ -519,7 +521,7 @@ export class CallMetadataAnalyzer {
       }
     ];
 
-    return scenarios[Math.floor(Math.random() * scenarios.length)] || scenarios[2];
+    return scenarios[Math.floor(Math.random() * scenarios.length)] ?? scenarios[2]!;
   }
 }
 

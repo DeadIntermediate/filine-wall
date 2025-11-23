@@ -4,6 +4,8 @@
  * Analyzes background noise, multiple voices, equipment sounds
  */
 
+import { logger } from '../utils/logger';
+
 interface AcousticFeatures {
   backgroundNoiseLevel: number;
   multipleVoicesDetected: boolean;
@@ -504,7 +506,8 @@ export class AcousticEnvironmentAnalysis {
       }
     ];
 
-    return scenarios[Math.floor(Math.random() * scenarios.length)];
+    const index = Math.floor(Math.random() * scenarios.length);
+    return scenarios[index] ?? scenarios[0]!;
   }
 }
 

@@ -5,6 +5,7 @@
  */
 
 import crypto from 'crypto';
+import { logger } from '../utils/logger';
 
 interface PASSporTHeader {
   alg: string; // Algorithm (ES256)

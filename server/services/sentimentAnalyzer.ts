@@ -4,6 +4,8 @@
  * Analyzes urgency, fear, pressure, and persuasion patterns
  */
 
+import { logger } from '../utils/logger';
+
 interface SentimentScore {
   overall: number; // -1 (very negative) to +1 (very positive)
   urgency: number; // 0-1 scale
@@ -482,7 +484,7 @@ export class SentimentAnalyzer {
       }
     ];
 
-    return scenarios[scenario] || scenarios[2];
+    return scenarios[scenario] ?? scenarios[2]!;
   }
 }
 

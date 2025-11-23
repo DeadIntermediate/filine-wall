@@ -4,6 +4,8 @@
  * Detects calls from suspicious VoIP providers and regions
  */
 
+import { logger } from '../utils/logger';
+
 interface IPReputationResult {
   ipAddress: string | null;
   isBlacklisted: boolean;
@@ -468,7 +470,7 @@ export class VoIPIPReputationChecker {
       }
     ];
 
-    return scenarios[scenario] || scenarios[2];
+    return scenarios[scenario] ?? scenarios[2]!;
   }
 }
 

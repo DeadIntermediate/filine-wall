@@ -4,6 +4,8 @@
  * Analyzes speech patterns, rhythm, and linguistic characteristics
  */
 
+import { logger } from '../utils/logger';
+
 interface VoiceFingerprint {
   speakingRate: number; // Words per minute
   pausePatterns: number[]; // Average pause durations
@@ -520,7 +522,7 @@ export class BehavioralBiometrics {
       }
     ];
 
-    return scenarios[scenario] || scenarios[2];
+    return scenarios[scenario] ?? scenarios[2]!;
   }
 }
 
