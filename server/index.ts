@@ -5,6 +5,7 @@ import { initializeScheduledTasks } from "./services/scheduledTasks";
 import { SpamDatabaseService } from "./services/spamDatabaseService";
 import { SpamDetectionService } from "./services/spamDetectionService";
 import { apiRateLimit } from "./middleware/rateLimit";
+import { logger } from "./utils/logger";
 
 const app = express();
 
@@ -14,6 +15,9 @@ app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
 // Trust proxy for rate limiting and IP detection
 app.set('trust proxy', 1);
+
+// Add comprehensive request logging
+app.use(logger.requestLogger());
 
 // CORS configuration for nginx proxy
 app.use((req, res, next) => {

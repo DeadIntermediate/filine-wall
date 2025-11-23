@@ -9,6 +9,7 @@ import { analyzeVoice } from "./voiceAnalysisService";
 import { lookupCarrier } from "./carrierLookup";
 import { SpamDatabaseService } from "./spamDatabaseService";
 import { detectScamPhrases } from "./scamPhraseDetection";
+import { logger } from "../utils/logger";
 
 interface ScreeningResult {
   action: "blocked" | "allowed" | "challenge";
@@ -58,6 +59,13 @@ export async function screenCall(
   sampleRate?: number
 ): Promise<ScreeningResult> {
   try {
+    // Log incoming call
+    logger.info(`📞 INCOMING CALL from ${phoneNumber}`, 'CallScreening', { 
+      phoneNumber,
+      hasAudio: !!audioData,
+      timestamp: new Date().toISOString()
+    });
+
     // Get carrier information
     const carrierInfo = await lookupCarrier(phoneNumber);
 
@@ -73,6 +81,12 @@ export async function screenCall(
     const fccCheck = await SpamDatabaseService.checkNumber(phoneNumber);
     if (fccCheck.isSpam) {
       const verificationResult = await generateVerificationCode(phoneNumber);
+      logger.warn(`🚫 BLOCKED - FCC spam database match: ${phoneNumber}`, 'CallScreening', {
+        phoneNumber,
+        reason: 'FCC spam database',
+        risk: 0.9,
+        fccData: fccCheck.details
+      });
       return {
         action: "blocked",
         reason: "Number found in FCC spam database",
@@ -88,6 +102,11 @@ export async function screenCall(
     });
 
     if (listedNumber?.type === "whitelist") {
+      logger.info(`✅ ALLOWED - Whitelisted: ${phoneNumber}`, 'CallScreening', {
+        phoneNumber,
+        reason: 'Whitelisted',
+        risk: 0
+      });
       return {
         action: "allowed",
         reason: "Number is whitelisted",
@@ -98,6 +117,11 @@ export async function screenCall(
 
     if (listedNumber?.type === "blacklist") {
       const verificationResult = await generateVerificationCode(phoneNumber);
+      logger.warn(`🚫 BLOCKED - Blacklisted: ${phoneNumber}`, 'CallScreening', {
+        phoneNumber,
+        reason: 'Blacklisted',
+        risk: 1.0
+      });
       return {
         action: "blocked",
         reason: "Number is blacklisted",
@@ -179,7 +203,7 @@ export async function screenCall(
         };
       }
     } catch (error) {
-      console.error("DNC check failed:", error);
+      logger.error("DNC check failed", error as Error, 'CallScreening', { phoneNumber });
       // Continue with other checks
     }
 
@@ -200,6 +224,13 @@ export async function screenCall(
     // High confidence spam prediction
     if (prediction.spamProbability > 0.7 && prediction.confidence > 0.5) {
       const verificationResult = await generateVerificationCode(phoneNumber);
+      logger.warn(`🚫 BLOCKED - High spam probability: ${phoneNumber}`, 'CallScreening', {
+        phoneNumber,
+        reason: 'High spam probability',
+        risk: prediction.spamProbability,
+        confidence: prediction.confidence,
+        factors: prediction.features
+      });
       return {
         action: "blocked",
         reason: "High spam probability detected",
@@ -223,6 +254,13 @@ export async function screenCall(
     // Uncertain cases - require challenge
     if (prediction.confidence < 0.6 || (voiceAnalysis && voiceAnalysis.confidence < 0.6)) {
       const verificationResult = await generateVerificationCode(phoneNumber);
+      logger.info(`⚠️  CHALLENGE - Verification required: ${phoneNumber}`, 'CallScreening', {
+        phoneNumber,
+        reason: 'Additional verification required',
+        risk: Math.max(prediction.spamProbability, voiceAnalysis?.confidence || 0),
+        predictionConfidence: prediction.confidence,
+        voiceConfidence: voiceAnalysis?.confidence
+      });
       return {
         action: "challenge",
         reason: "Additional verification required",
@@ -244,6 +282,13 @@ export async function screenCall(
     }
 
     // Allow call if all checks pass
+    logger.info(`✅ ALLOWED - All checks passed: ${phoneNumber}`, 'CallScreening', {
+      phoneNumber,
+      reason: 'All screening checks passed',
+      risk: prediction.spamProbability,
+      spamProbability: prediction.spamProbability,
+      confidence: prediction.confidence
+    });
     return {
       action: "allowed",
       reason: "Call passed all screening checks",
@@ -262,7 +307,10 @@ export async function screenCall(
       metadata: baseMetadata
     };
   } catch (error) {
-    console.error("Error in call screening:", error);
+    logger.error("Error in call screening", error as Error, 'CallScreening', { 
+      phoneNumber,
+      developmentMode: isDevelopmentMode 
+    });
     // In development mode, provide more details
     if (isDevelopmentMode) {
       return {
@@ -286,7 +334,7 @@ export async function screenCall(
   }
 }
 
-export async function logCall(phoneNumber: string, result: ScreeningResult) {
+export async function logCall(phoneNumber: string, result: ScreeningResult, deviceId?: string) {
   const callerIdInfo = {
     name: "Unknown",
     type: "Unknown",
@@ -325,5 +373,13 @@ export async function logCall(phoneNumber: string, result: ScreeningResult) {
       isMobile: result.metadata?.isMobile,
       developmentMode: result.metadata?.developmentMode
     }
+  });
+
+  // Log call to database
+  logger.debug('Call logged to database', 'CallScreening', {
+    phoneNumber,
+    action: result.action,
+    risk: result.risk,
+    deviceId
   });
 }
