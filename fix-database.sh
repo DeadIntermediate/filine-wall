@@ -11,16 +11,16 @@ echo ""
 
 # Step 1: Install required packages
 echo "📦 Installing required packages..."
-npm install pg@^8.13.1 dotenv@^16.4.5 --save --loglevel=error
-npm install @types/pg --save-dev --loglevel=error
+npm install postgres@^3.4.4 dotenv@^16.4.5 --save --loglevel=error
+npm install @types/node --save-dev --loglevel=error
 
 # Step 2: Fix db/index.ts
 echo "🔧 Updating db/index.ts to use PostgreSQL driver..."
 
 cat > db/index.ts << 'EOF'
-import { drizzle } from "drizzle-orm/node-postgres";
-import pkg from "pg";
-const { Pool } = pkg;
+/// <reference types="node" />
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema.js";
 
 if (!process.env.DATABASE_URL) {
@@ -29,11 +29,9 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+const client = postgres(process.env.DATABASE_URL);
 
-export const db = drizzle(pool, { schema });
+export const db = drizzle(client, { schema });
 EOF
 
 echo "✅ Database configuration fixed!"

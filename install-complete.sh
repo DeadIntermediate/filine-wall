@@ -260,8 +260,8 @@ install_project_deps() {
     
     # Install critical packages that may be missing
     log_progress "Ensuring critical packages are installed..."
-    npm install pg@^8.13.1 dotenv@^16.4.5 --save --loglevel=error 2>&1 | grep -v "up to date" || true
-    npm install @types/pg --save-dev --loglevel=error 2>&1 | grep -v "up to date" || true
+    npm install postgres@^3.4.4 dotenv@^16.4.5 --save --loglevel=error 2>&1 | grep -v "up to date" || true
+    npm install @types/node --save-dev --loglevel=error 2>&1 | grep -v "up to date" || true
     
     # Restore husky config if it was disabled
     if [ -f ".huskyrc.json.tmp" ]; then
@@ -396,9 +396,9 @@ fix_database_config() {
     # Fix db/index.ts to use PostgreSQL driver instead of Neon
     log_progress "Updating db/index.ts..."
     cat > "$PROJECT_DIR/db/index.ts" << 'EOF'
-import { drizzle } from "drizzle-orm/node-postgres";
-import pkg from "pg";
-const { Pool } = pkg;
+/// <reference types="node" />
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema.js";
 
 if (!process.env.DATABASE_URL) {
@@ -407,11 +407,9 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+const client = postgres(process.env.DATABASE_URL);
 
-export const db = drizzle(pool, { schema });
+export const db = drizzle(client, { schema });
 EOF
     
     # Add dotenv to server/index.ts if not present
@@ -525,10 +523,10 @@ run_health_checks() {
     fi
     
     log_progress "Checking critical packages..."
-    if [ -d "$PROJECT_DIR/node_modules/pg" ]; then
-        log_info "pg (PostgreSQL driver) installed ✓"
+    if [ -d "$PROJECT_DIR/node_modules/postgres" ]; then
+        log_info "postgres (PostgreSQL driver) installed ✓"
     else
-        log_warn "pg package missing (will be installed)"
+        log_warn "postgres package missing (will be installed)"
     fi
     
     if [ -d "$PROJECT_DIR/node_modules/dotenv" ]; then

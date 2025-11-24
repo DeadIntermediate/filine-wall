@@ -104,7 +104,7 @@ app.use((req, res, next) => {
 
     // Initialize spam detection model
     log("Loading AI spam detection model...");
-    await SpamDetectionService.loadModel()
+    await SpamDetectionService.ensureModelInitialized()
       .then(() => log("Spam detection model loaded successfully"))
       .catch(error => {
         log(`Warning: Failed to initialize spam detection model - ${error instanceof Error ? error.message : 'Unknown error'}`);
