@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# FiLine Wall Installation Script
-# Supports Ubuntu/Debian, CentOS/RHEL, macOS
+# FiLine Wall - Complete Installation & Setup Script
+# Comprehensive one-command installation for Raspberry Pi / Debian / Ubuntu / macOS
+# Version: 2.0
 
 set -e  # Exit on any error
 
@@ -10,37 +11,61 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Configuration
 NODE_VERSION="20"
-POSTGRES_VERSION="15"
-PROJECT_NAME="filinewall"
-INSTALL_DIR="/opt/filinewall"
-SERVICE_USER="filinewall"
-WEB_ROOT="/var/www/filinewall"
+DB_NAME="filine_wall"
+DB_USER="postgres"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_FILE="$PROJECT_DIR/install.log"
+
+# Installation tracking
+STEPS_TOTAL=12
+STEPS_COMPLETED=0
+
+# Start logging
+exec > >(tee -a "$LOG_FILE")
+exec 2>&1
 
 print_header() {
-    echo -e "${BLUE}"
-    echo "╔══════════════════════════════════════════════╗"
-    echo "║                FiLine Wall                   ║"
-    echo "║         Installation & Setup Script         ║"
-    echo "║                                              ║"
-    echo "║   Anti-Telemarketing & Spam Call Blocker    ║"
-    echo "╚══════════════════════════════════════════════╝"
+    clear
+    echo -e "${CYAN}"
+    echo "════════════════════════════════════════════════════════════════"
+    echo "                        🛡️  FiLine Wall  🛡️"
+    echo "            Complete Installation & Setup Script"
+    echo ""
+    echo "              Anti-Spam Call Blocker for Raspberry Pi"
+    echo "════════════════════════════════════════════════════════════════"
     echo -e "${NC}"
+    echo ""
+}
+
+print_step() {
+    STEPS_COMPLETED=$((STEPS_COMPLETED + 1))
+    echo ""
+    echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}[Step $STEPS_COMPLETED/$STEPS_TOTAL]${NC} ${GREEN}$1${NC}"
+    echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
 }
 
 log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+    echo -e "${GREEN}✓${NC} $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo -e "${YELLOW}⚠${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}✗${NC} $1"
+}
+
+log_progress() {
+    echo -e "${BLUE}➜${NC} $1"
 }
 
 # Detect OS
@@ -51,6 +76,11 @@ detect_os() {
     elif [[ -f /etc/debian_version ]]; then
         OS="debian"
         PACKAGE_MANAGER="apt"
+        # Detect Raspberry Pi
+        if grep -q "Raspberry Pi" /proc/cpuinfo 2>/dev/null; then
+            IS_RASPBERRY_PI=true
+            log_info "Raspberry Pi detected!"
+        fi
     elif [[ -f /etc/redhat-release ]]; then
         OS="redhat"
         PACKAGE_MANAGER="yum"
@@ -58,46 +88,53 @@ detect_os() {
         log_error "Unsupported operating system"
         exit 1
     fi
-    log_info "Detected OS: $OS"
 }
 
-# Check if running as root for system operations
-check_privileges() {
-    if [[ $EUID -eq 0 ]] && [[ "$1" != "--allow-root" ]]; then
-        log_error "This script should not be run as root for security reasons."
-        log_info "If you need to install system packages, the script will prompt for sudo."
-        log_info "Use --allow-root flag only if you understand the security implications."
-        exit 1
+# Check dependencies
+check_command() {
+    if command -v "$1" &> /dev/null; then
+        return 0
+    else
+        return 1
     fi
 }
 
 # Install system dependencies
 install_system_deps() {
-    log_info "Installing system dependencies..."
+    print_step "Installing System Dependencies"
     
     case $OS in
         "debian")
-            sudo apt update
-            sudo apt install -y curl wget git build-essential python3 python3-pip python3-venv \
-                               postgresql-$POSTGRES_VERSION postgresql-contrib nginx redis-server \
-                               software-properties-common gpg
-            ;;
-        "redhat")
-            sudo yum update -y
-            sudo yum groupinstall -y "Development Tools"
-            sudo yum install -y curl wget git python3 python3-pip postgresql-server \
-                               postgresql-contrib nginx redis epel-release
-            # Initialize PostgreSQL on RHEL/CentOS
-            sudo postgresql-setup initdb
+            log_progress "Updating package lists..."
+            sudo apt update -qq
+            
+            log_progress "Installing required packages..."
+            sudo apt install -y \
+                curl \
+                wget \
+                git \
+                build-essential \
+                python3 \
+                python3-pip \
+                python3-venv \
+                postgresql \
+                postgresql-contrib \
+                ca-certificates \
+                gnupg \
+                lsb-release \
+                usbutils \
+                2>&1 | grep -v "already the newest version" || true
+            
+            log_info "System packages installed"
             ;;
         "macos")
-            # Check if Homebrew is installed
-            if ! command -v brew &> /dev/null; then
-                log_info "Installing Homebrew..."
+            if ! check_command brew; then
+                log_progress "Installing Homebrew..."
                 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
             fi
+            log_progress "Installing packages via Homebrew..."
             brew update
-            brew install node@$NODE_VERSION postgresql@$POSTGRES_VERSION nginx redis python@3.11
+            brew install node@$NODE_VERSION postgresql python@3.11
             brew services start postgresql@$POSTGRES_VERSION
             brew services start redis
             ;;
