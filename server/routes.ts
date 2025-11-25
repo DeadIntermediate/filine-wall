@@ -1017,11 +1017,19 @@ export function registerRoutes(app: Express): Server {
           vendorId: '0baf',
           productId: '00eb',
           drivers: ['usb-serial', 'pl2303', 'ftdi_sio'],
-          description: 'USB Serial Modem'
+          description: '56k USB Hardware Fax Modem'
+        },
+        {
+          id: 'usr5686g',
+          name: 'USRobotics USR5686G',
+          vendorId: '0baf',
+          productId: '0100',
+          drivers: ['usb-serial', 'ti_usb_3410_5052'],
+          description: '56k USB Voice Fax Modem'
         },
         {
           id: 'grandstream-ht802',
-          name: 'Grandstream HT802',
+          name: 'Grandstream HT802 V2',
           vendorId: '2c0b',
           productId: '0003',
           drivers: ['cdc_acm'],
@@ -1158,8 +1166,15 @@ export function registerRoutes(app: Express): Server {
             drivers: ['usb-serial', 'pl2303', 'ftdi_sio']
           },
           {
+            id: 'usr5686g',
+            name: 'USRobotics USR5686G',
+            vendorId: '0baf',
+            productId: '0100',
+            drivers: ['usb-serial', 'ti_usb_3410_5052']
+          },
+          {
             id: 'grandstream-ht802',
-            name: 'Grandstream HT802',
+            name: 'Grandstream HT802 V2',
             vendorId: '2c0b',
             productId: '0003',
             drivers: ['cdc_acm']
@@ -1252,6 +1267,7 @@ export function registerRoutes(app: Express): Server {
               'ftdi_sio': 'linux-modules-extra-raspi',
               'usb-serial': 'linux-modules-extra-raspi',
               'cdc_acm': 'linux-modules-extra-raspi',
+              'ti_usb_3410_5052': 'linux-modules-extra-raspi',
             };
             
             packageName = driverPackageMap[driver] || driver;

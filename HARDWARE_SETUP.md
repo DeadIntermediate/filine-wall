@@ -7,13 +7,20 @@ FiLine Wall supports automatic hardware detection and driver installation for US
 ## Supported Hardware
 
 ### USRobotics USR5637
-- **Type**: USB Serial Modem
+- **Type**: 56k USB Hardware Fax Modem
 - **USB ID**: `0baf:00eb`
 - **Required Drivers**: `usb-serial`, `pl2303`, `ftdi_sio`
 - **Default Path**: `/dev/ttyUSB0`
 - **Baud Rate**: 115200
 
-### Grandstream HT802
+### USRobotics USR5686G
+- **Type**: 56k USB Voice Fax Modem
+- **USB ID**: `0baf:0100`
+- **Required Drivers**: `usb-serial`, `ti_usb_3410_5052`
+- **Default Path**: `/dev/ttyUSB0`
+- **Baud Rate**: 115200
+
+### Grandstream HT802 V2
 - **Type**: VoIP Analog Telephone Adapter
 - **USB ID**: `2c0b:0003`
 - **Required Drivers**: `cdc_acm`

@@ -59,10 +59,11 @@ node setup-wizard.js
 - **Hardware**: USB port for modem connection
 
 ### Supported Modems
-- USRobotics 5637 USB Fax Modem
-- Grandstream HT802 2-Port Analog Telephone Adapter (VoIP ATA)
-- StarTech 56k USB Dial-up and Fax Modem V.92 External
-- Any V.92 compatible USB modem with Caller ID support
+- **USRobotics USR5637** - 56k USB Hardware Fax Modem (Auto-detected)
+- **USRobotics USR5686G** - 56k USB Voice Fax Modem (Auto-detected)
+- **Grandstream HT802 V2** - 2-Port VoIP Analog Telephone Adapter (Auto-detected)
+- **Generic Serial Modems** - Any V.92 compatible USB modem with Caller ID support
+- **Custom Devices** - Manual configuration for other AT-command compatible modems
 
 ### Software Dependencies
 - **Node.js** 18+ (automatically installed)
