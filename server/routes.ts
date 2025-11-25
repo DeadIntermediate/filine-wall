@@ -1002,6 +1002,195 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Driver management endpoints
+  app.post("/api/hardware/drivers/check", async (req, res) => {
+    try {
+      const { deviceId, drivers, usbVendorId, usbProductId } = req.body;
+
+      console.log(`Checking drivers for device: ${deviceId}`);
+
+      // Check which kernel modules are loaded
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execPromise = promisify(exec);
+
+      const missingDrivers: string[] = [];
+      const installedDrivers: string[] = [];
+
+      for (const driver of drivers) {
+        try {
+          const { stdout } = await execPromise(`lsmod | grep -i ${driver}`);
+          if (stdout.trim()) {
+            installedDrivers.push(driver);
+            console.log(`✓ Driver ${driver} is loaded`);
+          } else {
+            missingDrivers.push(driver);
+            console.log(`✗ Driver ${driver} is not loaded`);
+          }
+        } catch (error) {
+          // Driver not loaded
+          missingDrivers.push(driver);
+          console.log(`✗ Driver ${driver} is not loaded`);
+        }
+      }
+
+      // Check if device is physically connected and detect hardware
+      let deviceConnected = false;
+      let detectedDevice = null;
+      
+      try {
+        const { stdout } = await execPromise('lsusb');
+        
+        // Known device database
+        const knownDevices = [
+          {
+            id: 'usr5637',
+            name: 'USRobotics USR5637',
+            vendorId: '0baf',
+            productId: '00eb',
+            drivers: ['usb-serial', 'pl2303', 'ftdi_sio']
+          },
+          {
+            id: 'grandstream-ht802',
+            name: 'Grandstream HT802',
+            vendorId: '2c0b',
+            productId: '0003',
+            drivers: ['cdc_acm']
+          }
+        ];
+
+        // Check for any known devices
+        for (const device of knownDevices) {
+          const vendorProductPattern = `${device.vendorId}:${device.productId}`;
+          if (stdout.toLowerCase().includes(vendorProductPattern)) {
+            detectedDevice = device;
+            deviceConnected = true;
+            console.log(`✓ Detected ${device.name} (${vendorProductPattern})`);
+            break;
+          }
+        }
+
+        // Also check if the requested device is connected
+        if (!deviceConnected && usbVendorId && usbProductId) {
+          const requestedPattern = `${usbVendorId}:${usbProductId}`;
+          deviceConnected = stdout.toLowerCase().includes(requestedPattern);
+        }
+
+        // Check for serial devices
+        try {
+          const { stdout: serialDevices } = await execPromise('ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null || true');
+          if (serialDevices.trim()) {
+            console.log(`✓ Found serial devices: ${serialDevices.trim().split('\n').join(', ')}`);
+          }
+        } catch (error) {
+          // No serial devices found
+        }
+      } catch (error) {
+        console.log("Could not check USB devices");
+      }
+
+      res.json({
+        allInstalled: missingDrivers.length === 0,
+        installedDrivers,
+        missingDrivers,
+        deviceConnected,
+        detectedDevice,
+        message: detectedDevice 
+          ? `Detected ${detectedDevice.name}. ${missingDrivers.length === 0 ? 'All drivers installed.' : `Missing ${missingDrivers.length} driver(s).`}`
+          : missingDrivers.length === 0 
+            ? "All required drivers are installed"
+            : `Missing ${missingDrivers.length} driver(s)`
+      });
+    } catch (error) {
+      console.error("Error checking drivers:", error);
+      res.status(500).json({ 
+        allInstalled: false,
+        message: "Failed to check drivers"
+      });
+    }
+  });
+
+  app.post("/api/hardware/drivers/install", async (req, res) => {
+    try {
+      const { deviceId, drivers } = req.body;
+
+      console.log(`Installing drivers for device: ${deviceId}`);
+      console.log(`Drivers to install: ${drivers.join(', ')}`);
+
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execPromise = promisify(exec);
+
+      const installed: string[] = [];
+      const failed: string[] = [];
+
+      for (const driver of drivers) {
+        try {
+          console.log(`Loading kernel module: ${driver}`);
+          
+          // Try to load the kernel module
+          await execPromise(`sudo modprobe ${driver}`);
+          installed.push(driver);
+          console.log(`✓ Successfully loaded ${driver}`);
+        } catch (error) {
+          console.log(`✗ Failed to load ${driver}, attempting to install...`);
+          
+          // If modprobe fails, try installing the package
+          try {
+            let packageName = driver;
+            
+            // Map driver names to package names
+            const driverPackageMap: Record<string, string> = {
+              'pl2303': 'linux-modules-extra-raspi',
+              'ftdi_sio': 'linux-modules-extra-raspi',
+              'usb-serial': 'linux-modules-extra-raspi',
+              'cdc_acm': 'linux-modules-extra-raspi',
+            };
+            
+            packageName = driverPackageMap[driver] || driver;
+            
+            // Install the package (this requires sudo privileges)
+            await execPromise(`sudo apt-get install -y ${packageName}`);
+            
+            // Try loading again
+            await execPromise(`sudo modprobe ${driver}`);
+            installed.push(driver);
+            console.log(`✓ Successfully installed and loaded ${driver}`);
+          } catch (installError) {
+            failed.push(driver);
+            console.log(`✗ Failed to install ${driver}`);
+          }
+        }
+      }
+
+      // Make drivers load on boot
+      if (installed.length > 0) {
+        try {
+          const modulesContent = installed.join('\n') + '\n';
+          await execPromise(`echo "${modulesContent}" | sudo tee -a /etc/modules > /dev/null`);
+          console.log("✓ Drivers configured to load on boot");
+        } catch (error) {
+          console.log("Could not configure drivers to load on boot");
+        }
+      }
+
+      res.json({
+        success: failed.length === 0,
+        installed,
+        failed,
+        message: failed.length === 0
+          ? `Successfully installed ${installed.length} driver(s). Please plug in your device.`
+          : `Installed ${installed.length} driver(s), but ${failed.length} failed. You may need to install them manually.`
+      });
+    } catch (error) {
+      console.error("Error installing drivers:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Failed to install drivers. Please check system permissions."
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

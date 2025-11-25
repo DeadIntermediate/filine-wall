@@ -26,6 +26,9 @@ const MODEM_DEVICES = [
     defaultPath: "/dev/ttyUSB0",
     defaultBaud: 115200,
     icon: Phone,
+    drivers: ["usb-serial", "pl2303", "ftdi_sio"],
+    usbVendorId: "0baf",
+    usbProductId: "00eb",
   },
   {
     id: "grandstream-ht802",
@@ -34,6 +37,9 @@ const MODEM_DEVICES = [
     defaultPath: "/dev/ttyACM0",
     defaultBaud: 115200,
     icon: Wifi,
+    drivers: ["cdc_acm"],
+    usbVendorId: "2c0b",
+    usbProductId: "0003",
   },
   {
     id: "generic-serial",
@@ -42,6 +48,9 @@ const MODEM_DEVICES = [
     defaultPath: "/dev/ttyUSB0",
     defaultBaud: 115200,
     icon: HardDrive,
+    drivers: ["usb-serial", "pl2303"],
+    usbVendorId: null,
+    usbProductId: null,
   },
   {
     id: "custom",
@@ -50,12 +59,21 @@ const MODEM_DEVICES = [
     defaultPath: "/dev/ttyUSB0",
     defaultBaud: 115200,
     icon: Cpu,
+    drivers: [],
+    usbVendorId: null,
+    usbProductId: null,
   },
 ];
 
 export function HardwareConfig() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [driverStatus, setDriverStatus] = useState<{
+    checking: boolean;
+    installed: boolean;
+    missing: string[];
+    message: string;
+  } | null>(null);
 
   const { data: config } = useQuery<ModemConfig>({
     queryKey: ["/api/hardware/modem"],
@@ -119,7 +137,7 @@ export function HardwareConfig() {
     },
   });
 
-  const handleDeviceChange = (deviceId: string) => {
+  const handleDeviceChange = async (deviceId: string) => {
     const device = MODEM_DEVICES.find(d => d.id === deviceId);
     if (device) {
       setLocalConfig({
@@ -127,6 +145,104 @@ export function HardwareConfig() {
         deviceType: deviceId,
         devicePath: device.defaultPath,
         baudRate: device.defaultBaud,
+      });
+
+      // Check and install drivers for the selected device
+      if (device.drivers.length > 0) {
+        await checkAndInstallDrivers(device);
+      }
+    }
+  };
+
+  const checkAndInstallDrivers = async (device: typeof MODEM_DEVICES[0]) => {
+    setDriverStatus({
+      checking: true,
+      installed: false,
+      missing: [],
+      message: "Checking drivers..."
+    });
+
+    try {
+      const response = await fetch("/api/hardware/drivers/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: device.id,
+          drivers: device.drivers,
+          usbVendorId: device.usbVendorId,
+          usbProductId: device.usbProductId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.allInstalled) {
+        setDriverStatus({
+          checking: false,
+          installed: true,
+          missing: [],
+          message: "All drivers are installed and up to date"
+        });
+        toast({
+          title: "Drivers ready",
+          description: `${device.name} drivers are installed and ready.`,
+        });
+      } else {
+        // Install missing drivers
+        setDriverStatus({
+          checking: true,
+          installed: false,
+          missing: result.missingDrivers,
+          message: `Installing ${result.missingDrivers.length} driver(s)...`
+        });
+
+        const installResponse = await fetch("/api/hardware/drivers/install", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            deviceId: device.id,
+            drivers: result.missingDrivers,
+          }),
+        });
+
+        const installResult = await installResponse.json();
+
+        if (installResult.success) {
+          setDriverStatus({
+            checking: false,
+            installed: true,
+            missing: [],
+            message: "Drivers installed successfully"
+          });
+          toast({
+            title: "Drivers installed",
+            description: `${device.name} is ready to use. You can now plug in your device.`,
+          });
+        } else {
+          setDriverStatus({
+            checking: false,
+            installed: false,
+            missing: result.missingDrivers,
+            message: installResult.message || "Failed to install some drivers"
+          });
+          toast({
+            title: "Driver installation incomplete",
+            description: installResult.message,
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
+      setDriverStatus({
+        checking: false,
+        installed: false,
+        missing: [],
+        message: "Error checking drivers"
+      });
+      toast({
+        title: "Error",
+        description: "Failed to check drivers. Please try again.",
+        variant: "destructive",
       });
     }
   };
@@ -211,6 +327,36 @@ export function HardwareConfig() {
                   <p className="text-sm text-muted-foreground">
                     {selectedDevice.description}
                   </p>
+                  
+                  {/* Driver Status */}
+                  {driverStatus && (
+                    <div className="mt-3 p-2 rounded bg-background/50">
+                      <div className="flex items-center gap-2 text-sm">
+                        {driverStatus.checking && (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                            <span className="text-muted-foreground">{driverStatus.message}</span>
+                          </>
+                        )}
+                        {!driverStatus.checking && driverStatus.installed && (
+                          <>
+                            <div className="h-4 w-4 rounded-full bg-green-500 flex items-center justify-center">
+                              <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                            <span className="text-green-600 dark:text-green-400 font-medium">{driverStatus.message}</span>
+                          </>
+                        )}
+                        {!driverStatus.checking && !driverStatus.installed && driverStatus.missing.length > 0 && (
+                          <>
+                            <div className="h-4 w-4 rounded-full bg-yellow-500"></div>
+                            <span className="text-yellow-600 dark:text-yellow-400">{driverStatus.message}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
