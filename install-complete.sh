@@ -156,6 +156,9 @@ install_postgresql() {
     
     case $OS in
         "debian")
+            log_progress "Cleaning up old PostgreSQL repository..."
+            sudo rm -f /etc/apt/sources.list.d/pgdg.list 2>/dev/null || true
+            
             log_progress "Adding PostgreSQL repository..."
             
             # Install required packages for adding repository
