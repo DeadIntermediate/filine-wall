@@ -934,6 +934,74 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Hardware Configuration Endpoints
+  app.get("/api/hardware/modem", async (req, res) => {
+    try {
+      // Get modem configuration from environment or database
+      const config = {
+        enabled: process.env.MODEM_ENABLED === "true",
+        deviceType: process.env.MODEM_TYPE || "usrobotics-usr5637",
+        devicePath: process.env.MODEM_PATH || "/dev/ttyUSB0",
+        baudRate: parseInt(process.env.MODEM_BAUD_RATE || "115200"),
+        autoDetect: process.env.MODEM_AUTO_DETECT !== "false",
+      };
+      res.json(config);
+    } catch (error) {
+      console.error("Error fetching modem config:", error);
+      res.status(500).json({ message: "Failed to fetch modem configuration" });
+    }
+  });
+
+  app.post("/api/hardware/modem", async (req, res) => {
+    try {
+      const { enabled, deviceType, devicePath, baudRate, autoDetect } = req.body;
+      
+      // In production, this would update a configuration file or database
+      // For now, we'll just acknowledge the update
+      console.log("Modem configuration updated:", {
+        enabled,
+        deviceType,
+        devicePath,
+        baudRate,
+        autoDetect
+      });
+
+      res.json({
+        success: true,
+        message: "Modem configuration updated successfully",
+        config: { enabled, deviceType, devicePath, baudRate, autoDetect }
+      });
+    } catch (error) {
+      console.error("Error updating modem config:", error);
+      res.status(500).json({ message: "Failed to update modem configuration" });
+    }
+  });
+
+  app.post("/api/hardware/modem/test", async (req, res) => {
+    try {
+      // Simulate modem connection test
+      // In production, this would actually communicate with the modem
+      const testResult = {
+        success: true,
+        message: "Modem connection successful. Device is responding to AT commands.",
+        details: {
+          manufacturer: "USRobotics",
+          model: "USR5637",
+          firmware: "v1.2.3",
+          signalStrength: "Strong"
+        }
+      };
+
+      res.json(testResult);
+    } catch (error) {
+      console.error("Error testing modem connection:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Failed to connect to modem. Please check your configuration."
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

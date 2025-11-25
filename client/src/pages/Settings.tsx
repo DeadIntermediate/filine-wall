@@ -1,5 +1,6 @@
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { GitHubWizard } from "@/components/GitHubWizard";
+import { HardwareConfig } from "@/components/HardwareConfig";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Github } from "lucide-react";
@@ -16,7 +17,9 @@ export default function Settings() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <Card className="mb-6">
+        <HardwareConfig />
+
+        <Card className="mt-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Github className="h-5 w-5" />
