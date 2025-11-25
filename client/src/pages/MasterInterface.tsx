@@ -70,16 +70,11 @@ export default function MasterInterface() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
+      <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">FiLine Wall Master Control</h1>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="w-full sm:w-auto">
-            <RiskScoreGauge score={riskScore?.currentRisk ?? 0} label="System Risk Score" />
-          </div>
-          <Button variant="outline" className="whitespace-nowrap">
-            System Status: {devices.some(d => d.status === 'online') ? 'Online' : 'Offline'}
-          </Button>
-        </div>
+        <Button variant="outline">
+          System Status: {devices.some(d => d.status === 'online') ? 'Online' : 'Offline'}
+        </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -94,6 +89,7 @@ export default function MasterInterface() {
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <RiskScoreGauge score={riskScore?.currentRisk ?? 0} label="System Risk Score" />
             <Statistics />
             <Card>
               <CardHeader>
