@@ -1,6 +1,19 @@
 #!/bin/bash
 cd "$(dirname "$0")"
 
+# Check if we're already inside tmux
+if [ -n "$TMUX" ]; then
+    echo "Already running inside tmux session"
+    RUN_IN_TMUX=false
+else
+    # Check if tmux is installed
+    if ! command -v tmux &> /dev/null; then
+        echo "⚠️  tmux not installed. Installing..."
+        sudo apt update -qq && sudo apt install -y tmux
+    fi
+    RUN_IN_TMUX=true
+fi
+
 # Check if .env exists, create if missing
 if [ ! -f .env ]; then
     echo "⚠️  .env file not found. Creating one now..."
@@ -49,10 +62,35 @@ if ! grep -q "DATABASE_URL=" .env; then
     exit 1
 fi
 
-echo "🚀 Starting FiLine Wall..."
+# If running in tmux, start the app directly
+if [ "$RUN_IN_TMUX" = false ]; then
+    echo "🚀 Starting FiLine Wall..."
+    echo "📁 Working directory: $(pwd)"
+    echo "📄 Using .env file: $(pwd)/.env"
+    echo ""
+    npm run dev
+    exit 0
+fi
+
+# Kill existing tmux session if it exists
+tmux has-session -t filine-wall 2>/dev/null && tmux kill-session -t filine-wall
+
+# Start new tmux session
+echo "🚀 Starting FiLine Wall in tmux session..."
 echo "📁 Working directory: $(pwd)"
 echo "📄 Using .env file: $(pwd)/.env"
 echo ""
+echo "To attach to the session: tmux attach -t filine-wall"
+echo "To detach from session: Press Ctrl+B then D"
+echo "To stop FiLine Wall: tmux kill-session -t filine-wall"
+echo ""
 
-# Use npm run dev which properly loads .env through the dev script
-npm run dev
+# Create tmux session and run the app
+tmux new-session -d -s filine-wall "cd $(pwd) && npm run dev"
+
+# Wait a moment for the session to start
+sleep 2
+
+# Attach to the session
+echo "Attaching to tmux session..."
+tmux attach -t filine-wall
