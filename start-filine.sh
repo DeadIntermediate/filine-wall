@@ -41,5 +41,18 @@ EOF
     echo ""
 fi
 
+# Verify .env has DATABASE_URL
+if ! grep -q "DATABASE_URL=" .env; then
+    echo "❌ ERROR: .env file exists but DATABASE_URL is not set!"
+    echo ""
+    echo "Please run: ./fix-env.sh"
+    exit 1
+fi
+
 echo "🚀 Starting FiLine Wall..."
-npx tsx server/index.ts
+echo "📁 Working directory: $(pwd)"
+echo "📄 Using .env file: $(pwd)/.env"
+echo ""
+
+# Use npm run dev which properly loads .env through the dev script
+npm run dev
