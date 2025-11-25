@@ -47,9 +47,9 @@ export function RiskScoreGauge({ score, label }: RiskScoreGaugeProps) {
   };
 
   return (
-    <Card>
+    <Card className="max-w-sm">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 text-base">
           <motion.div
             whileHover={{ rotate: 360 }}
             transition={{ duration: 0.5 }}
@@ -59,9 +59,9 @@ export function RiskScoreGauge({ score, label }: RiskScoreGaugeProps) {
           {label || "Risk Score"}
         </CardTitle>
       </CardHeader>
-      <CardContent className="pt-6">
+      <CardContent className="pt-4">
         <motion.div 
-          className="h-[200px] w-full"
+          className="h-[180px] w-full"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}

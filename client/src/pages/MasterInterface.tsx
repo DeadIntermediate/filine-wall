@@ -70,11 +70,13 @@ export default function MasterInterface() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
         <h1 className="text-3xl font-bold">FiLine Wall Master Control</h1>
-        <div className="flex items-center gap-4">
-          <RiskScoreGauge score={riskScore?.currentRisk ?? 0} label="System Risk Score" />
-          <Button variant="outline">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="w-full sm:w-auto">
+            <RiskScoreGauge score={riskScore?.currentRisk ?? 0} label="System Risk Score" />
+          </div>
+          <Button variant="outline" className="whitespace-nowrap">
             System Status: {devices.some(d => d.status === 'online') ? 'Online' : 'Offline'}
           </Button>
         </div>
