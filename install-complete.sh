@@ -157,38 +157,19 @@ install_postgresql() {
     case $OS in
         "debian")
             log_progress "Adding PostgreSQL repository..."
-            sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-            wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - 2>/dev/null || true
-            sudo apt update -qq
             
-            log_progress "Installing PostgreSQL $POSTGRES_VERSION..."
-            sudo DEBIAN_FRONTEND=noninteractive apt install -y postgresql-${POSTGRES_VERSION} postgresql-contrib-${POSTGRES_VERSION} 2>&1 | grep -E "(Setting up|Processing)" || true
+            # Install required packages for adding repository
+            sudo DEBIAN_FRONTEND=noninteractive apt install -y wget gnupg2 lsb-release 2>&1 | grep -E "(Setting up|Processing)" || true
             
-            log_progress "Starting PostgreSQL service..."
-            sudo systemctl start postgresql@${POSTGRES_VERSION}-main 2>/dev/null || sudo systemctl start postgresql
-            sudo systemctl enable postgresql@${POSTGRES_VERSION}-main 2>/dev/null || sudo systemctl enable postgresql
-            sleep 3
-            ;;
-        "macos")
-            log_progress "Installing PostgreSQL..."
-            brew install postgresql@${POSTGRES_VERSION}
-            brew services start postgresql@${POSTGRES_VERSION}
-            sleep 3
-            ;;
-    esac
-    
-    log_info "PostgreSQL $POSTGRES_VERSION installed ✓"
-}
-
-# Step 4: Install PostgreSQL 18
-install_postgresql() {
-    print_step "Installing PostgreSQL $POSTGRES_VERSION"
-    
-    case $OS in
-        "debian")
-            log_progress "Adding PostgreSQL repository..."
-            sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-            wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - 2>/dev/null || true
+            # Add PostgreSQL GPG key using the new method
+            sudo mkdir -p /etc/apt/keyrings
+            wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
+                sudo gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg 2>/dev/null || true
+            
+            # Add PostgreSQL repository with signed-by option
+            echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | \
+                sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+            
             sudo apt update -qq
             
             log_progress "Installing PostgreSQL $POSTGRES_VERSION..."
