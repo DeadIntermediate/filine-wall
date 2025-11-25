@@ -2,7 +2,11 @@
 
 # FiLine Wall - Complete One-Command Installation Script
 # Comprehensive automated installation for Raspberry Pi / Debian / Ubuntu / macOS
-# Version: 2.0 - Ultra Comprehensive Edition
+# Version: 3.0 - Ultra Comprehensive Edition with PostgreSQL 18
+# 
+# Usage: 
+#   curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/install-complete.sh | bash
+#   OR download and run: ./install-complete.sh
 
 set -e  # Exit on any error
 
@@ -17,14 +21,19 @@ NC='\033[0m'
 
 # Configuration
 NODE_VERSION="20"
+POSTGRES_VERSION="18"
 DB_NAME="filine_wall"
 DB_USER="postgres"
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DB_PASSWORD="postgres"
+REPO_URL="https://github.com/DeadIntermediate/filine-wall.git"
+INSTALL_DIR="$HOME/filine-wall"
+PROJECT_DIR="${PROJECT_DIR:-$INSTALL_DIR}"
 LOG_FILE="$PROJECT_DIR/install.log"
-STEPS_TOTAL=15
+STEPS_TOTAL=18
 STEPS_COMPLETED=0
 
 # Start logging
+mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
 exec > >(tee -a "$LOG_FILE")
 exec 2>&1
 
@@ -36,6 +45,7 @@ print_header() {
     echo "          Complete One-Command Installation Script"
     echo ""
     echo "            Anti-Spam Call Blocker for Raspberry Pi"
+    echo "            PostgreSQL 18 • Node.js 20 • Full Stack"
     echo "════════════════════════════════════════════════════════════════"
     echo -e "${NC}"
     echo ""
@@ -124,8 +134,6 @@ install_system_deps() {
                 gnupg \
                 lsb-release \
                 usbutils \
-                postgresql \
-                postgresql-contrib \
                 2>&1 | grep -E "(Setting up|Processing)" || true
             
             log_info "System packages installed"
@@ -136,13 +144,73 @@ install_system_deps() {
                 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
             fi
             log_progress "Installing packages..."
-            brew install postgresql python@3.11 2>&1 | grep -v "already installed" || true
+            brew install python@3.11 2>&1 | grep -v "already installed" || true
             log_info "Homebrew packages installed"
             ;;
     esac
 }
 
-# Step 4: Install Node.js
+# Step 4: Install PostgreSQL 18
+install_postgresql() {
+    print_step "Installing PostgreSQL $POSTGRES_VERSION"
+    
+    case $OS in
+        "debian")
+            log_progress "Adding PostgreSQL repository..."
+            sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+            wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - 2>/dev/null || true
+            sudo apt update -qq
+            
+            log_progress "Installing PostgreSQL $POSTGRES_VERSION..."
+            sudo DEBIAN_FRONTEND=noninteractive apt install -y postgresql-${POSTGRES_VERSION} postgresql-contrib-${POSTGRES_VERSION} 2>&1 | grep -E "(Setting up|Processing)" || true
+            
+            log_progress "Starting PostgreSQL service..."
+            sudo systemctl start postgresql@${POSTGRES_VERSION}-main 2>/dev/null || sudo systemctl start postgresql
+            sudo systemctl enable postgresql@${POSTGRES_VERSION}-main 2>/dev/null || sudo systemctl enable postgresql
+            sleep 3
+            ;;
+        "macos")
+            log_progress "Installing PostgreSQL..."
+            brew install postgresql@${POSTGRES_VERSION}
+            brew services start postgresql@${POSTGRES_VERSION}
+            sleep 3
+            ;;
+    esac
+    
+    log_info "PostgreSQL $POSTGRES_VERSION installed ✓"
+}
+
+# Step 4: Install PostgreSQL 18
+install_postgresql() {
+    print_step "Installing PostgreSQL $POSTGRES_VERSION"
+    
+    case $OS in
+        "debian")
+            log_progress "Adding PostgreSQL repository..."
+            sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+            wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - 2>/dev/null || true
+            sudo apt update -qq
+            
+            log_progress "Installing PostgreSQL $POSTGRES_VERSION..."
+            sudo DEBIAN_FRONTEND=noninteractive apt install -y postgresql-${POSTGRES_VERSION} postgresql-contrib-${POSTGRES_VERSION} 2>&1 | grep -E "(Setting up|Processing)" || true
+            
+            log_progress "Starting PostgreSQL service..."
+            sudo systemctl start postgresql@${POSTGRES_VERSION}-main 2>/dev/null || sudo systemctl start postgresql
+            sudo systemctl enable postgresql@${POSTGRES_VERSION}-main 2>/dev/null || sudo systemctl enable postgresql
+            sleep 3
+            ;;
+        "macos")
+            log_progress "Installing PostgreSQL..."
+            brew install postgresql@${POSTGRES_VERSION}
+            brew services start postgresql@${POSTGRES_VERSION}
+            sleep 3
+            ;;
+    esac
+    
+    log_info "PostgreSQL $POSTGRES_VERSION installed ✓"
+}
+
+# Step 5: Install Node.js
 install_nodejs() {
     print_step "Installing Node.js $NODE_VERSION"
     
@@ -173,7 +241,38 @@ install_nodejs() {
     log_info "npm $(npm --version) installed ✓"
 }
 
-# Step 5: Setup PostgreSQL
+# Step 6: Download or use existing project
+download_project() {
+    print_step "Setting Up Project Files"
+    
+    # If we're already in the project directory (script was run from there)
+    if [ -f "$PROJECT_DIR/package.json" ] && [ -f "$PROJECT_DIR/db/schema.ts" ]; then
+        log_info "Project files already present ✓"
+        cd "$PROJECT_DIR"
+        return 0
+    fi
+    
+    # Check if install directory already exists
+    if [ -d "$INSTALL_DIR" ] && [ -d "$INSTALL_DIR/.git" ]; then
+        log_warn "FiLine Wall already exists at $INSTALL_DIR"
+        log_progress "Updating existing installation..."
+        cd "$INSTALL_DIR"
+        git pull origin main 2>&1 | head -5 || log_warn "Git pull failed, continuing..."
+        PROJECT_DIR="$INSTALL_DIR"
+    else
+        log_progress "Cloning FiLine Wall from GitHub..."
+        rm -rf "$INSTALL_DIR" 2>/dev/null || true
+        git clone "$REPO_URL" "$INSTALL_DIR" 2>&1 | grep -E "(Cloning|Receiving)" || true
+        cd "$INSTALL_DIR"
+        PROJECT_DIR="$INSTALL_DIR"
+        log_info "Project cloned to $INSTALL_DIR ✓"
+    fi
+    
+    # Update log file location
+    LOG_FILE="$PROJECT_DIR/install.log"
+}
+
+# Step 7: Setup PostgreSQL database
 setup_postgresql() {
     print_step "Setting Up PostgreSQL Database"
     
@@ -377,7 +476,7 @@ EOF
     log_info "DATABASE_URL: postgresql://postgres:postgres@localhost:5432/$DB_NAME ✓"
 }
 
-# Step 9: Create directories
+# Step 11: Create directories
 create_directories() {
     print_step "Creating Required Directories"
     
@@ -387,7 +486,7 @@ create_directories() {
     log_info "Directories created: logs, models, uploads ✓"
 }
 
-# Step 10: Fix database and server configuration
+# Step 12: Fix database and server configuration
 fix_database_config() {
     print_step "Fixing Database Driver Configuration"
     
@@ -433,7 +532,7 @@ EOF
     log_info "Database driver fixed (PostgreSQL) ✓"
 }
 
-# Step 11: Setup database schema
+# Step 13: Setup database schema
 setup_database_schema() {
     print_step "Setting Up Database Schema"
     
@@ -445,7 +544,7 @@ setup_database_schema() {
     log_info "Database schema created ✓"
 }
 
-# Step 12: Build project
+# Step 14: Build project
 build_project() {
     print_step "Building Project"
     
@@ -459,7 +558,7 @@ build_project() {
     log_info "Project built successfully ✓"
 }
 
-# Step 13: Make scripts executable
+# Step 15: Make scripts executable
 setup_scripts() {
     print_step "Setting Up Launch Scripts"
     
@@ -470,7 +569,7 @@ setup_scripts() {
     log_info "Scripts are executable ✓"
 }
 
-# Step 14: Run health checks
+# Step 16: Run health checks
 run_health_checks() {
     print_step "Running Health Checks"
     
@@ -550,7 +649,22 @@ run_health_checks() {
     log_info "All health checks passed! ✓"
 }
 
-# Step 14: Show completion and auto-start
+# Step 17: Create start script
+create_start_script() {
+    print_step "Creating Easy Start Script"
+    
+    cat > "$PROJECT_DIR/start-filine.sh" << 'STARTSCRIPT'
+#!/bin/bash
+cd "$(dirname "$0")"
+echo "🚀 Starting FiLine Wall..."
+npx tsx server/index.ts
+STARTSCRIPT
+    
+    chmod +x "$PROJECT_DIR/start-filine.sh"
+    log_info "Start script created: ./start-filine.sh ✓"
+}
+
+# Step 18: Show completion and auto-start
 show_completion_and_start() {
     print_step "Installation Complete! 🎉"
     
@@ -561,37 +675,46 @@ show_completion_and_start() {
     echo ""
     
     echo -e "${CYAN}📦 What was installed:${NC}"
+    echo -e "  ${GREEN}✓${NC} PostgreSQL $POSTGRES_VERSION"
     echo -e "  ${GREEN}✓${NC} Node.js $(node --version)"
     echo -e "  ${GREEN}✓${NC} npm $(npm --version)"
-    echo -e "  ${GREEN}✓${NC} PostgreSQL database"
-    echo -e "  ${GREEN}✓${NC} ~200 npm packages"
+    echo -e "  ${GREEN}✓${NC} FiLine Wall application"
     echo -e "  ${GREEN}✓${NC} Database schema"
     echo -e "  ${GREEN}✓${NC} Environment configuration"
     echo -e "  ${GREEN}✓${NC} Build artifacts"
+    echo ""
+    
+    echo -e "${CYAN}📂 Installation directory:${NC}"
+    echo -e "  ${BLUE}$PROJECT_DIR${NC}"
     echo ""
     
     echo -e "${CYAN}📊 Installation log saved to:${NC}"
     echo -e "  ${BLUE}$LOG_FILE${NC}"
     echo ""
     
-    echo -e "${CYAN}🚀 Starting FiLine Wall now...${NC}"
+    echo -e "${CYAN}🚀 To start FiLine Wall:${NC}"
+    echo -e "  ${BLUE}cd $PROJECT_DIR${NC}"
+    echo -e "  ${BLUE}./start-filine.sh${NC}"
+    echo ""
+    echo -e "${CYAN}Or use the standard start script:${NC}"
+    echo -e "  ${BLUE}./start.sh${NC}"
+    echo ""
+    echo -e "${CYAN}🌐 Access points:${NC}"
+    echo -e "  ${BLUE}Web Interface: http://localhost:5000${NC}"
+    echo -e "  ${BLUE}API Health:    http://localhost:5000/health${NC}"
     echo ""
     
-    # Auto-start the application
-    if [ -f "$PROJECT_DIR/start.sh" ]; then
-        chmod +x "$PROJECT_DIR/start.sh"
-        log_info "Launching application..."
+    read -p "Would you like to start FiLine Wall now? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Starting FiLine Wall..."
         echo ""
-        exec "$PROJECT_DIR/start.sh"
+        cd "$PROJECT_DIR"
+        exec ./start-filine.sh
     else
-        log_warn "start.sh not found, manual start required"
         echo ""
-        echo -e "${YELLOW}To start FiLine Wall manually:${NC}"
-        echo -e "  ${CYAN}cd $PROJECT_DIR${NC}"
-        echo -e "  ${CYAN}./start.sh${NC}"
-        echo ""
-        echo -e "${YELLOW}Then open your browser to:${NC}"
-        echo -e "  ${BLUE}http://localhost:5173${NC}"
+        log_info "Installation complete! Start FiLine Wall when ready with:"
+        echo -e "  ${BLUE}cd $PROJECT_DIR && ./start-filine.sh${NC}"
     fi
 }
 
@@ -616,13 +739,15 @@ main() {
     print_header
     
     log_info "Starting comprehensive FiLine Wall installation..."
-    log_info "Log file: $LOG_FILE"
+    log_info "This will install everything needed to run FiLine Wall"
     echo ""
     
     detect_os
     update_system
     install_system_deps
+    install_postgresql
     install_nodejs
+    download_project
     setup_postgresql
     clean_old_install
     install_project_deps
@@ -633,6 +758,7 @@ main() {
     build_project
     setup_scripts
     run_health_checks
+    create_start_script
     show_completion_and_start
 }
 
