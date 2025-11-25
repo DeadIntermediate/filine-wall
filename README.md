@@ -88,6 +88,20 @@ node setup-wizard.js
 
 ## ⚙️ Hardware Setup
 
+### Automatic Driver Installation
+
+FiLine Wall can automatically detect and configure USB modems:
+
+```bash
+# Run passwordless sudo setup (one-time)
+sudo ./setup-sudo.sh
+
+# Start FiLine Wall and go to Settings → Hardware Configuration
+# Click "Detect Devices" to auto-configure your modem
+```
+
+For detailed hardware setup instructions, see [HARDWARE_SETUP.md](HARDWARE_SETUP.md)
+
 ### Modem Connection
 1. Connect your USB modem to your system
 2. Connect your phone line to the modem's LINE port

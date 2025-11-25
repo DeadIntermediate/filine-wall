@@ -1002,6 +1002,113 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Auto-detect connected hardware devices
+  app.get("/api/hardware/detect", async (req, res) => {
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execPromise = promisify(exec);
+
+      // Known device database
+      const knownDevices = [
+        {
+          id: 'usr5637',
+          name: 'USRobotics USR5637',
+          vendorId: '0baf',
+          productId: '00eb',
+          drivers: ['usb-serial', 'pl2303', 'ftdi_sio'],
+          description: 'USB Serial Modem'
+        },
+        {
+          id: 'grandstream-ht802',
+          name: 'Grandstream HT802',
+          vendorId: '2c0b',
+          productId: '0003',
+          drivers: ['cdc_acm'],
+          description: 'VoIP Analog Telephone Adapter'
+        }
+      ];
+
+      const detectedDevices = [];
+
+      try {
+        const { stdout } = await execPromise('lsusb');
+        
+        // Check for each known device
+        for (const device of knownDevices) {
+          const vendorProductPattern = `${device.vendorId}:${device.productId}`;
+          if (stdout.toLowerCase().includes(vendorProductPattern)) {
+            // Check if drivers are loaded
+            const driverStatus = [];
+            for (const driver of device.drivers) {
+              try {
+                const { stdout: lsmodOutput } = await execPromise(`lsmod | grep -i ${driver}`);
+                driverStatus.push({
+                  driver,
+                  loaded: !!lsmodOutput.trim()
+                });
+              } catch (error) {
+                driverStatus.push({
+                  driver,
+                  loaded: false
+                });
+              }
+            }
+
+            detectedDevices.push({
+              ...device,
+              driverStatus,
+              allDriversLoaded: driverStatus.every(d => d.loaded)
+            });
+          }
+        }
+
+        // Check for serial devices
+        const serialDevices = [];
+        try {
+          const { stdout: usbDevices } = await execPromise('ls /dev/ttyUSB* 2>/dev/null || true');
+          if (usbDevices.trim()) {
+            serialDevices.push(...usbDevices.trim().split('\n'));
+          }
+        } catch (error) {
+          // No USB serial devices
+        }
+
+        try {
+          const { stdout: acmDevices } = await execPromise('ls /dev/ttyACM* 2>/dev/null || true');
+          if (acmDevices.trim()) {
+            serialDevices.push(...acmDevices.trim().split('\n'));
+          }
+        } catch (error) {
+          // No ACM devices
+        }
+
+        res.json({
+          success: true,
+          detectedDevices,
+          serialDevices,
+          message: detectedDevices.length > 0
+            ? `Found ${detectedDevices.length} known device(s)`
+            : 'No known devices detected. You can still configure manually.'
+        });
+      } catch (error) {
+        console.error("Error detecting devices:", error);
+        res.json({
+          success: false,
+          detectedDevices: [],
+          serialDevices: [],
+          message: 'Could not scan for devices'
+        });
+      }
+    } catch (error) {
+      console.error("Error in device detection:", error);
+      res.status(500).json({
+        success: false,
+        message: 'Device detection failed'
+      });
+    }
+  });
+
   // Driver management endpoints
   app.post("/api/hardware/drivers/check", async (req, res) => {
     try {

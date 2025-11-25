@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Cpu, HardDrive, Wifi } from "lucide-react";
+import { Phone, Cpu, HardDrive, Wifi, Loader2, CheckCircle2, AlertCircle, Search } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface ModemConfig {
@@ -74,6 +74,8 @@ export function HardwareConfig() {
     missing: string[];
     message: string;
   } | null>(null);
+  const [detectedDevices, setDetectedDevices] = useState<any[]>([]);
+  const [isDetecting, setIsDetecting] = useState(false);
 
   const { data: config } = useQuery<ModemConfig>({
     queryKey: ["/api/hardware/modem"],
@@ -136,6 +138,63 @@ export function HardwareConfig() {
       });
     },
   });
+
+  // Auto-detect devices on mount
+  const detectDevices = async () => {
+    setIsDetecting(true);
+    try {
+      const response = await fetch('/api/hardware/detect');
+      const data = await response.json();
+      
+      if (data.success && data.detectedDevices.length > 0) {
+        setDetectedDevices(data.detectedDevices);
+        toast({
+          title: "Devices Detected",
+          description: `Found ${data.detectedDevices.length} device(s): ${data.detectedDevices.map((d: any) => d.name).join(', ')}`,
+        });
+        
+        // Auto-select the first detected device
+        const firstDevice = data.detectedDevices[0];
+        const deviceInfo = MODEM_DEVICES.find(d => d.id === firstDevice.id);
+        
+        if (deviceInfo) {
+          setLocalConfig(prev => ({
+            ...prev,
+            deviceType: firstDevice.id,
+            devicePath: deviceInfo.defaultPath,
+            baudRate: deviceInfo.defaultBaud,
+          }));
+          
+          // Check drivers for the detected device
+          if (!firstDevice.allDriversLoaded) {
+            await checkAndInstallDrivers(deviceInfo);
+          } else {
+            setDriverStatus({
+              checking: false,
+              installed: true,
+              missing: [],
+              message: 'All drivers are loaded'
+            });
+          }
+        }
+      } else {
+        toast({
+          title: "No Devices Found",
+          description: "No known modems detected. You can configure manually.",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error('Device detection failed:', error);
+      toast({
+        title: "Detection Failed",
+        description: "Could not scan for devices. Please configure manually.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDetecting(false);
+    }
+  };
 
   const handleDeviceChange = async (deviceId: string) => {
     const device = MODEM_DEVICES.find(d => d.id === deviceId);
@@ -290,6 +349,39 @@ export function HardwareConfig() {
             exit={{ opacity: 0, height: 0 }}
             className="space-y-4"
           >
+            {/* Auto-Detect Button */}
+            <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="space-y-0.5">
+                <Label className="text-blue-900 dark:text-blue-100">Auto-Detect Hardware</Label>
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  Scan for connected USB modems and automatically configure drivers
+                </p>
+                {detectedDevices.length > 0 && (
+                  <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                    ✓ {detectedDevices.length} device(s) found: {detectedDevices.map((d: any) => d.name).join(', ')}
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                onClick={detectDevices}
+                disabled={isDetecting}
+                className="border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900"
+              >
+                {isDetecting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Scanning...
+                  </>
+                ) : (
+                  <>
+                    <Search className="mr-2 h-4 w-4" />
+                    Detect Devices
+                  </>
+                )}
+              </Button>
+            </div>
+
             {/* Device Selection */}
             <div className="space-y-2">
               <Label htmlFor="device-type">Device Type</Label>
