@@ -68,8 +68,18 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Protected routes - Master Interface (admin only)
-  app.use("/api/admin/*", authenticate, requireAdmin);
+  // Optional authentication for local/home use
+  // If REQUIRE_AUTH=true in .env, enforce authentication
+  // Otherwise, allow public access for single-user home deployments
+  const requireAuth = process.env.REQUIRE_AUTH === 'true';
+  
+  if (requireAuth) {
+    // Protected routes - Master Interface (admin only)
+    app.use("/api/admin/*", authenticate, requireAdmin);
+    console.log("🔒 Authentication enabled for admin routes");
+  } else {
+    console.log("🔓 Running in open access mode (local deployment)");
+  }
 
   // Move existing admin routes under /api/admin
   app.get("/api/admin/stats", async (req, res) => {
@@ -114,8 +124,10 @@ export function registerRoutes(app: Express): Server {
   });
 
 
-  // Protected routes - User Interface (authenticated users)
-  app.use("/api/user/*", authenticate);
+  // Protected routes - User Interface (authenticated users only if REQUIRE_AUTH is enabled)
+  if (requireAuth) {
+    app.use("/api/user/*", authenticate);
+  }
 
   app.get("/api/user/calls", async (req, res) => {
     const logs = await db.query.callLogs.findMany({

@@ -24,6 +24,12 @@ NODE_ENV=development
 HOST=0.0.0.0
 PORT=5000
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/filine_wall
+
+# Authentication Settings
+# Set to 'true' to require login for admin/user interfaces (recommended for public deployments)
+# Set to 'false' for local/home single-user installations (no login required)
+REQUIRE_AUTH=false
+
 JWT_SECRET=change-this-to-a-secure-random-string
 ENCRYPTION_KEY=change-this-to-a-32-character-string
 SESSION_SECRET=change-this-session-secret
