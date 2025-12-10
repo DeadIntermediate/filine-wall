@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FCCDatabaseView } from "@/components/FCCDatabaseView";
 import { DeviceConfigPanel } from "@/components/DeviceConfigPanel";
 import { DeviceDiagnosticTool } from "@/components/DeviceDiagnosticTool";
@@ -13,6 +12,18 @@ import { HeatmapView } from "@/components/HeatmapView";
 import { RiskScoreGauge } from "@/components/RiskScoreGauge";
 import { GitHubWizard } from "@/components/GitHubWizard";
 import { Settings, type Setting } from "@/components/ui/settings";
+import { 
+  LayoutDashboard, 
+  Smartphone, 
+  Database, 
+  BarChart3, 
+  Settings as SettingsIcon, 
+  Wrench,
+  ChevronLeft,
+  ChevronRight,
+  Shield
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Device {
   deviceId: string;
@@ -39,6 +50,7 @@ interface SystemStats {
 export default function MasterInterface() {
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Fetch connected devices status
   const { data: devices = [] } = useQuery<Device[]>({
@@ -66,118 +78,203 @@ export default function MasterInterface() {
     if (devices.length > 0 && !selectedDeviceId) {
       setSelectedDeviceId(devices[0].deviceId);
     }
-  }, [devices]);
+  }, [devices, selectedDeviceId]);
+
+  const menuItems = [
+    { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "devices", label: "Devices", icon: Smartphone },
+    { id: "database", label: "Database", icon: Database },
+    { id: "analytics", label: "Analytics", icon: BarChart3 },
+    { id: "settings", label: "Settings", icon: SettingsIcon },
+    { id: "advanced", label: "Advanced", icon: Wrench },
+  ];
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">FiLine Wall Master Control</h1>
-        <Button variant="outline">
-          System Status: {devices.some(d => d.status === 'online') ? 'Online' : 'Offline'}
-        </Button>
-      </div>
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 flex flex-col",
+          sidebarCollapsed ? "w-16" : "w-64"
+        )}
+      >
+        {/* Logo/Header */}
+        <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700">
+          {!sidebarCollapsed && (
+            <div className="flex items-center space-x-2">
+              <Shield className="h-6 w-6 text-blue-600" />
+              <h1 className="text-xl font-bold">FiLine Wall</h1>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="ml-auto"
+          >
+            {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
+        </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-6 w-full">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="devices">Devices</TabsTrigger>
-          <TabsTrigger value="database">Database</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-          <TabsTrigger value="advanced">Advanced</TabsTrigger>
-        </TabsList>
+        {/* Navigation Menu */}
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={cn(
+                  "w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors text-left",
+                  activeTab === item.id
+                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-medium"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                )}
+              >
+                <Icon className="h-5 w-5 flex-shrink-0" />
+                {!sidebarCollapsed && <span>{item.label}</span>}
+              </button>
+            );
+          })}
+        </nav>
 
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <RiskScoreGauge score={riskScore?.currentRisk ?? 0} label="System Risk Score" />
-            <Statistics />
-            <Card>
-              <CardHeader>
-                <CardTitle>Connected Devices</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {devices.map((device) => (
-                    <div key={device.deviceId} className="flex items-center justify-between">
-                      <span>{device.name}</span>
-                      <span className={device.status === 'online' ? 'text-green-500' : 'text-red-500'}>
-                        {device.status}
-                      </span>
+        {/* System Status */}
+        {!sidebarCollapsed && (
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600 dark:text-gray-400">System Status</span>
+              <div className="flex items-center space-x-2">
+                <div
+                  className={cn(
+                    "h-2 w-2 rounded-full",
+                    devices.some(d => d.status === 'online') ? "bg-green-500" : "bg-red-500"
+                  )}
+                />
+                <span className="text-sm font-medium">
+                  {devices.some(d => d.status === 'online') ? 'Online' : 'Offline'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Bar */}
+        <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {menuItems.find(item => item.id === activeTab)?.label || "Dashboard"}
+          </h2>
+          <div className="flex items-center space-x-4">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {stats && (
+                <span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{stats.todayBlocks}</span> blocks today
+                </span>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeTab === "overview" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <RiskScoreGauge score={riskScore?.currentRisk ?? 0} label="System Risk Score" />
+                <Statistics />
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Connected Devices</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {devices.map((device) => (
+                        <div key={device.deviceId} className="flex items-center justify-between">
+                          <span>{device.name}</span>
+                          <span className={device.status === 'online' ? 'text-green-500' : 'text-red-500'}>
+                            {device.status}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-            <SpamReportList />
-          </div>
-        </TabsContent>
+                  </CardContent>
+                </Card>
+              </div>
+              <SpamReportList />
+            </div>
+          )}
 
-        <TabsContent value="devices">
-          <div className="space-y-6">
-            <DeviceConfigPanel />
-            {selectedDeviceId && (
-              <DeviceDiagnosticTool deviceId={selectedDeviceId} />
-            )}
-          </div>
-        </TabsContent>
+          {activeTab === "devices" && (
+            <div className="space-y-6">
+              <DeviceConfigPanel />
+              {selectedDeviceId && (
+                <DeviceDiagnosticTool deviceId={selectedDeviceId} />
+              )}
+            </div>
+          )}
 
-        <TabsContent value="database">
-          <div className="space-y-6">
-            <FCCDatabaseView />
-          </div>
-        </TabsContent>
+          {activeTab === "database" && (
+            <div className="space-y-6">
+              <FCCDatabaseView />
+            </div>
+          )}
 
-        <TabsContent value="analytics" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Call Trends</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CallTrendAnalytics />
-            </CardContent>
-          </Card>
+          {activeTab === "analytics" && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Call Trends</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CallTrendAnalytics />
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Geographic Distribution</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <HeatmapView />
-            </CardContent>
-          </Card>
-        </TabsContent>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Geographic Distribution</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <HeatmapView />
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
-        <TabsContent value="settings">
-          <Settings 
-            settings={settings} 
-            onUpdate={async (key, value) => {
-              await fetch('/api/admin/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key, value })
-              });
-            }}
-          />
-        </TabsContent>
+          {activeTab === "settings" && (
+            <Settings 
+              settings={settings} 
+              onUpdate={async (key, value) => {
+                await fetch('/api/admin/settings', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ key, value })
+                });
+              }}
+            />
+          )}
 
-        <TabsContent value="advanced">
-          <div className="space-y-6">
-            <GitHubWizard />
-            <Card>
-              <CardHeader>
-                <CardTitle>System Maintenance</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <Button variant="outline">Update Database Schema</Button>
-                  <Button variant="outline">Export System Logs</Button>
-                  <Button variant="outline">Backup Configuration</Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
+          {activeTab === "advanced" && (
+            <div className="space-y-6">
+              <GitHubWizard />
+              <Card>
+                <CardHeader>
+                  <CardTitle>System Maintenance</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <Button variant="outline">Update Database Schema</Button>
+                    <Button variant="outline">Export System Logs</Button>
+                    <Button variant="outline">Backup Configuration</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }
