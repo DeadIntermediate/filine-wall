@@ -375,6 +375,32 @@ install_project_deps() {
     npm install postgres@^3.4.4 dotenv@^16.4.5 --save --loglevel=error 2>&1 | grep -v "up to date" || true
     npm install @types/node --save-dev --loglevel=error 2>&1 | grep -v "up to date" || true
     
+    # Verify critical dependencies
+    log_progress "Verifying critical dependencies..."
+    MISSING_DEPS=""
+    
+    if [ ! -d "node_modules/drizzle-zod" ]; then
+        log_warn "drizzle-zod missing, installing..."
+        npm install drizzle-zod@^0.6.0 --save --loglevel=error || MISSING_DEPS="$MISSING_DEPS drizzle-zod"
+    fi
+    
+    if [ ! -d "node_modules/drizzle-orm" ]; then
+        log_warn "drizzle-orm missing, installing..."
+        npm install drizzle-orm@^0.38.2 --save --loglevel=error || MISSING_DEPS="$MISSING_DEPS drizzle-orm"
+    fi
+    
+    if [ ! -d "node_modules/postgres" ]; then
+        log_warn "postgres missing, installing..."
+        npm install postgres@^3.4.4 --save --loglevel=error || MISSING_DEPS="$MISSING_DEPS postgres"
+    fi
+    
+    if [ -n "$MISSING_DEPS" ]; then
+        log_error "Failed to install:$MISSING_DEPS"
+        log_warn "You may need to run: ./fix-dependencies.sh"
+    else
+        log_info "All critical dependencies verified ✓"
+    fi
+    
     # Restore husky config if it was disabled
     if [ -f ".huskyrc.json.tmp" ]; then
         mv .huskyrc.json.tmp .huskyrc.json 2>/dev/null || true
