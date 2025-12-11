@@ -8,7 +8,23 @@ FiLine Wall is a comprehensive, hardware-powered solution that blocks robocalls,
 
 Choose your preferred installation method:
 
-### 🐳 Docker (Recommended - One Command)
+### ⚡ Quick Install from GitHub (Recommended)
+```bash
+# One-command install - clones repo and runs complete setup
+curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/quick-install.sh | bash
+
+# Install specific branch
+curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/quick-install.sh | bash -s develop
+```
+
+### 🔄 Update Existing Installation from GitHub
+```bash
+# Pull latest changes and update
+cd ~/filine-wall
+./update-from-github.sh
+```
+
+### 🐳 Docker (One Command)
 ```bash
 # Download and run the Docker setup script
 curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/docker-setup.sh | bash
