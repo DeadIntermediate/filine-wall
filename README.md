@@ -1,12 +1,17 @@
 # FiLine Wall
 
+![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
+![Node](https://img.shields.io/badge/node-20+-brightgreen.svg)
+
 **Advanced Anti-Telemarketing & Spam Call Blocking System**
 
 FiLine Wall is a comprehensive, hardware-powered solution that blocks robocalls, telemarketers, and spam calls before they reach your phone. Using real-time AI analysis, voice pattern recognition, and collaborative spam detection, it provides superior protection against unwanted calls.
 
 ## 🚀 Quick Installation
 
-### ⚡ Recommended: Install from GitHub
+### ⚡ Quick Install from GitHub (Recommended)
 ```bash
 # One-command install - clones repo and runs complete setup
 curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/quick-install.sh | bash
@@ -147,20 +152,26 @@ SPAM_API_KEY=your_spam_detection_api_key
 - ✅ **Collaborative Database**: Crowdsourced spam reporting
 - ✅ **Caller ID Verification**: Cross-references legitimate business numbers
 
-### Advanced Features
+### Web Interface & Monitoring
 - 📊 **Real-time Dashboard**: Monitor call activity and blocking statistics
-- 📈 **Analytics & Reporting**: Detailed insights into call patterns
+- �️ **Live Call Monitor**: Watch incoming calls being blocked in real-time
+- �📈 **Analytics & Reporting**: Detailed insights into call patterns
+- 🎨 **Modern UI**: Sleek sidebar navigation with collapsible menu
+- 📱 **Mobile-Responsive**: Full functionality on phones and tablets
+- 🌐 **Web-Based Control**: Manage settings from any device
+
+### Advanced Features
 - 🔔 **Smart Notifications**: Configurable alerts via email, SMS, or push
 - 👥 **Multi-user Support**: Family accounts with individual preferences
-- 🌐 **Web Interface**: Manage settings from any device
-- 📱 **Mobile-Responsive**: Full functionality on phones and tablets
+- 🔄 **GitHub Updates**: One-command updates from GitHub repository
+- ⚡ **Auto-Detection**: Automatically detects dependency and schema changes
+- � **Call Logs**: Complete call history with risk scores and actions
 
 ### Security & Privacy
 - 🔒 **End-to-End Encryption**: All data encrypted at rest and in transit
 - 🔐 **Role-Based Access**: Admin, user, and read-only permission levels
 - 🛡️ **Rate Limiting**: Protection against API abuse
 - 📝 **Audit Logging**: Complete activity tracking for security
-- 🔄 **Automatic Updates**: Security patches and spam database updates
 
 ## 🧠 Advanced AI/ML Features
 
