@@ -11,6 +11,7 @@ import { CallTrendAnalytics } from "@/components/CallTrendAnalytics";
 import { HeatmapView } from "@/components/HeatmapView";
 import { RiskScoreGauge } from "@/components/RiskScoreGauge";
 import { GitHubWizard } from "@/components/GitHubWizard";
+import { CallMonitor } from "@/components/CallMonitor";
 import { Settings, type Setting } from "@/components/ui/settings";
 import { 
   LayoutDashboard, 
@@ -21,7 +22,8 @@ import {
   Wrench,
   ChevronLeft,
   ChevronRight,
-  Shield
+  Shield,
+  Monitor
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +84,7 @@ export default function MasterInterface() {
 
   const menuItems = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "monitor", label: "Monitor", icon: Monitor },
     { id: "devices", label: "Devices", icon: Smartphone },
     { id: "database", label: "Database", icon: Database },
     { id: "analytics", label: "Analytics", icon: BarChart3 },
@@ -203,6 +206,12 @@ export default function MasterInterface() {
                 </Card>
               </div>
               <SpamReportList />
+            </div>
+          )}
+
+          {activeTab === "monitor" && (
+            <div className="space-y-6">
+              <CallMonitor />
             </div>
           )}
 
