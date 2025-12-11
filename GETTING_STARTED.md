@@ -11,7 +11,7 @@
 ```bash
 # 1. Run automatic setup
 chmod +x setup.sh
-./setup.sh
+./install-complete.sh
 
 # 2. Start the application
 chmod +x start.sh
@@ -22,7 +22,7 @@ chmod +x start.sh
 
 ```powershell
 # 1. Run automatic setup
-.\setup.ps1
+.\install-complete.sh
 
 # 2. Start the application
 .\start.ps1
@@ -327,7 +327,7 @@ PORT=5001
 **".env file not found"**
 ```bash
 # Run setup script first
-./setup.sh  # or .\setup.ps1 on Windows
+./install-complete.sh  # or .\install-complete.sh on Windows
 ```
 
 **"Module not found" errors**

@@ -19,7 +19,7 @@ Run the automated fix script:
 
 **Windows (PowerShell):**
 ```powershell
-.\Fix-CriticalIssues.ps1
+.\install-complete.sh
 ```
 
 **Linux/Mac:**

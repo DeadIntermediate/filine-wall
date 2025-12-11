@@ -56,7 +56,7 @@ FiLine Wall is a **feature-rich** spam call blocking system with excellent archi
 **Solution:**
 ```bash
 # Run the automated fix
-.\Fix-CriticalIssues.ps1
+.\install-complete.sh
 ```
 
 **Files Affected:**
@@ -239,7 +239,7 @@ npm install ioredis
 **Estimated Time:** 2-3 days
 
 - [x] ~~Create automated fix scripts~~ ✅ Done
-- [ ] Run Fix-CriticalIssues.ps1
+- [ ] Run install-complete.sh
 - [ ] Implement encryption service
 - [ ] Add Redis caching
 - [ ] Set up basic testing (Jest)
@@ -295,7 +295,7 @@ npm install ioredis
 
 1. **Fix TypeScript Errors**
    ```powershell
-   .\Fix-CriticalIssues.ps1
+   .\install-complete.sh
    ```
 
 2. **Verify Installation**
@@ -427,7 +427,7 @@ npm install ioredis
 
 **Priority:** 🔥 Fix TypeScript errors first
 
-1. Run `.\Fix-CriticalIssues.ps1`
+1. Run `.\install-complete.sh`
 2. Verify with `npm run type-check`
 3. Set up `.env` file
 4. Initialize database
@@ -479,7 +479,7 @@ npm install ioredis
 - **API Setup:** See `SPAM_API_SETUP.md`
 
 ### Scripts
-- **Fix Issues:** `.\Fix-CriticalIssues.ps1`
+- **Fix Issues:** `.\install-complete.sh`
 - **Health Check:** `.\scripts\health-check.ps1`
 - **Database Setup:** `.\setup-database.sh` (Linux)
 
@@ -500,7 +500,7 @@ curl http://localhost:5000/health
 ## ✅ Final Checklist
 
 ### Before First Use
-- [ ] Run Fix-CriticalIssues.ps1
+- [ ] Run install-complete.sh
 - [ ] Configure .env file
 - [ ] Initialize database (db:push)
 - [ ] Seed test data (db:seed)
@@ -533,7 +533,7 @@ curl http://localhost:5000/health
 
 FiLine Wall has an **excellent foundation** with advanced features that rival commercial solutions. With the critical fixes addressed (TypeScript errors, encryption, testing), it will be ready for production use.
 
-**Your Next Step:** Run `.\Fix-CriticalIssues.ps1` now to get started!
+**Your Next Step:** Run `.\install-complete.sh` now to get started!
 
 **Estimated Time to Production:** 1-2 weeks if following the roadmap
 

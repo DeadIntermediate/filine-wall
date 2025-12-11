@@ -35,21 +35,6 @@ cd ~/filine-wall
 - Safely stashes local modifications
 - Shows commit history
 
-### 🐳 Docker Installation (Alternative)
-```bash
-# Docker-based setup
-curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/docker-setup.sh | bash
-```
-
-### 🖥️ Windows Installation
-```powershell
-# Run PowerShell as Administrator
-git clone https://github.com/DeadIntermediate/filine-wall.git
-cd filine-wall
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\install.ps1
-```
-
 ### � Manual Installation
 ```bash
 # Clone repository
@@ -64,7 +49,7 @@ chmod +x install-complete.sh
 ## 📋 System Requirements
 
 ### Minimum Requirements
-- **OS**: Linux (Ubuntu 20.04+), macOS (10.15+), Windows 10/11
+- **OS**: Linux (Ubuntu 20.04+, Debian 11+, Raspberry Pi OS)
 - **RAM**: 2GB minimum, 4GB recommended
 - **Storage**: 10GB free space
 - **Network**: Internet connection for spam database updates
@@ -445,10 +430,10 @@ For detailed technical documentation on the ML/AI features, see [ML_FEATURES.md]
 ## 📚 Documentation
 
 ### Installation Guides
-- [**DEPLOYMENT.md**](DEPLOYMENT.md) - Comprehensive deployment options
-- [**Docker Setup**](docker-setup.sh) - Container-based installation
-- [**Windows Guide**](install.ps1) - PowerShell installation script
-- [**Linux/macOS Guide**](install.sh) - Bash installation script
+- [**Quick Install**](quick-install.sh) - One-command GitHub installation
+- [**Update Script**](update-from-github.sh) - Update from GitHub
+- [**Complete Installer**](install-complete.sh) - Full installation script
+- [**DEPLOYMENT.md**](DEPLOYMENT.md) - Advanced deployment options
 
 ### User Guides
 - **Getting Started**: First-time setup and configuration
@@ -492,8 +477,7 @@ filine-wall/
 ├── server/          # Express.js API server
 ├── device-client/   # Python modem interface
 ├── db/             # Database schema and migrations
-├── docker/         # Docker configuration files
-└── scripts/        # Utility and setup scripts
+└── models/         # AI/ML models and training data
 ```
 
 ## 🤝 Contributing

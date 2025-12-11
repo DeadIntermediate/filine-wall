@@ -59,14 +59,14 @@ fi
 # Check if setup has been run
 if [ ! -f ".env" ]; then
     log_error "Environment file not found!"
-    log_info "Please run the setup script first: ${GREEN}./setup.sh${NC}"
+    log_info "Please run the installer first: ${GREEN}./install-complete.sh${NC}"
     exit 1
 fi
 
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then
     log_error "Dependencies not installed!"
-    log_info "Please run the setup script first: ${GREEN}./setup.sh${NC}"
+    log_info "Please run the installer first: ${GREEN}./install-complete.sh${NC}"
     exit 1
 fi
 

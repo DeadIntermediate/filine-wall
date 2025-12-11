@@ -1,76 +1,66 @@
 # Quick Installation Guide
 
-## One-Command Installation
+## One-Command Installation from GitHub
 
-### 🐳 Docker (Recommended)
+### ⚡ Quick Install (Recommended)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/docker-setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/quick-install.sh | bash
 ```
 
-### 🐧 Linux/macOS
+### � Manual Installation
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/install.sh | bash
+# Clone repository
+git clone https://github.com/DeadIntermediate/filine-wall.git
+cd filine-wall
+
+# Run installer
+chmod +x install-complete.sh
+./install-complete.sh
 ```
 
-### 🖥️ Windows
-```powershell
-# Run as Administrator
-irm https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/install.ps1 | iex
+### � Update Existing Installation
+```bash
+cd ~/filine-wall
+./update-from-github.sh
 ```
 
 ## What Gets Installed
 
 ✅ **Core System**
-- Node.js 20+ with npm/pnpm
-- PostgreSQL 15+ database
-- Redis cache (optional)
-- Nginx reverse proxy
+- Node.js 20+ with npm
+- PostgreSQL 18+ database
+- System dependencies
 
 ✅ **FiLine Wall Application**
-- Web interface on port 80/443
-- API server on port 5000
+- Web interface on port 5000
+- API server
 - Device client for modem interface
 - Database with spam detection data
 
 ✅ **Security Features**
-- SSL/TLS encryption
 - JWT authentication
 - Rate limiting
 - Audit logging
 
 ## Post-Installation
 
-1. **Access Web Interface**: http://localhost
+1. **Access Web Interface**: http://localhost:5000
 2. **Default Login**: admin / admin123 ⚠️ **CHANGE IMMEDIATELY**
 3. **Connect Modem**: Plug in your V.92 USB modem
 4. **Configure Settings**: Set up number lists and preferences
 
 ## Troubleshooting
 
-### Installation Issues
+### Check Service Status
 ```bash
-# Check service status
-sudo systemctl status filinewall
-sudo systemctl status nginx
-sudo systemctl status postgresql
+# Check if services are running
+cd ~/filine-wall
+./manage-filine.sh status
 
-# View logs
-sudo journalctl -u filinewall -f
-```
-
-### Docker Issues
-```bash
-# Check containers
-docker-compose ps
-
-# View logs
-docker-compose logs -f
-
-# Restart services
-docker-compose restart
+# View application logs
+tail -f logs/*.log
 ```
 
 ### Need Help?
 - 📖 **Full Documentation**: README.md
 - 🚀 **Deployment Guide**: DEPLOYMENT.md
-- 🧙‍♂️ **Interactive Setup**: `node setup-wizard.js`
