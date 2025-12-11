@@ -274,11 +274,40 @@ setup_postgresql() {
             ;;
     esac
     
-    log_progress "Creating database '$DB_NAME'..."
-    sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'" | grep -q 1 || \
-        sudo -u postgres psql -c "CREATE DATABASE $DB_NAME;" > /dev/null 2>&1
+    # Generate secure database password
+    DB_PASSWORD=$(node -e "console.log(require('crypto').randomBytes(16).toString('hex'))")
+    DB_USER="filinewall"
     
-    log_info "PostgreSQL database ready ✓"
+    log_progress "Creating database user '$DB_USER'..."
+    # Check if user exists, create if not
+    if ! sudo -u postgres psql -tc "SELECT 1 FROM pg_user WHERE usename = '$DB_USER'" | grep -q 1; then
+        sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" > /dev/null 2>&1
+        log_info "Database user created ✓"
+    else
+        log_info "Database user already exists, updating password..."
+        sudo -u postgres psql -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" > /dev/null 2>&1
+    fi
+    
+    log_progress "Creating database '$DB_NAME'..."
+    # Check if database exists, create if not
+    if ! sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'" | grep -q 1; then
+        sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" > /dev/null 2>&1
+        log_info "Database created ✓"
+    else
+        log_info "Database already exists, updating ownership..."
+        sudo -u postgres psql -c "ALTER DATABASE $DB_NAME OWNER TO $DB_USER;" > /dev/null 2>&1
+    fi
+    
+    log_progress "Granting privileges..."
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" > /dev/null 2>&1
+    
+    # Store credentials for later use in .env
+    export DB_USER DB_PASSWORD
+    
+    log_info "PostgreSQL database provisioned ✓"
+    log_info "Database: $DB_NAME"
+    log_info "User: $DB_USER"
+    log_info "Password: [auto-generated]"
 }
 
 # Step 6: Clean old installations
@@ -439,25 +468,25 @@ EOF
         sed -i '' "s|JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|g" "$PROJECT_DIR/.env"
         sed -i '' "s|ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$ENCRYPTION_KEY|g" "$PROJECT_DIR/.env"
         sed -i '' "s|SESSION_SECRET=.*|SESSION_SECRET=$SESSION_SECRET|g" "$PROJECT_DIR/.env"
-        sed -i '' "s|DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:postgres@localhost:5432/$DB_NAME|g" "$PROJECT_DIR/.env"
+        sed -i '' "s|DATABASE_URL=.*|DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME|g" "$PROJECT_DIR/.env"
         sed -i '' "s|HOST=.*|HOST=0.0.0.0|g" "$PROJECT_DIR/.env"
     else
         sed -i "s|JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|g" "$PROJECT_DIR/.env"
         sed -i "s|ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$ENCRYPTION_KEY|g" "$PROJECT_DIR/.env"
         sed -i "s|SESSION_SECRET=.*|SESSION_SECRET=$SESSION_SECRET|g" "$PROJECT_DIR/.env"
-        sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:postgres@localhost:5432/$DB_NAME|g" "$PROJECT_DIR/.env"
+        sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME|g" "$PROJECT_DIR/.env"
         sed -i "s|HOST=.*|HOST=0.0.0.0|g" "$PROJECT_DIR/.env"
     fi
     
     # Verify DATABASE_URL is set
     if ! grep -q "^DATABASE_URL=postgresql://" "$PROJECT_DIR/.env"; then
         log_warn "DATABASE_URL not properly set, adding it..."
-        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/$DB_NAME" >> "$PROJECT_DIR/.env"
+        echo "DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME" >> "$PROJECT_DIR/.env"
     fi
     
     log_info "Environment configured ✓"
     log_info "Secrets generated ✓"
-    log_info "DATABASE_URL: postgresql://postgres:postgres@localhost:5432/$DB_NAME ✓"
+    log_info "DATABASE_URL: postgresql://$DB_USER:****@localhost:5432/$DB_NAME ✓"
 }
 
 # Step 11: Create directories
@@ -672,7 +701,14 @@ show_completion_and_start() {
     echo -e "  ${BLUE}$PROJECT_DIR${NC}"
     echo ""
     
-    echo -e "${CYAN}📊 Installation log saved to:${NC}"
+    echo -e "${CYAN}�️  Database provisioned:${NC}"
+    echo -e "  ${GREEN}Database:${NC} $DB_NAME"
+    echo -e "  ${GREEN}User:${NC}     $DB_USER"
+    echo -e "  ${GREEN}Host:${NC}     localhost:5432"
+    echo -e "  ${YELLOW}Note:${NC}     Credentials auto-generated and saved to .env"
+    echo ""
+    
+    echo -e "${CYAN}�📊 Installation log saved to:${NC}"
     echo -e "  ${BLUE}$LOG_FILE${NC}"
     echo ""
     
@@ -685,6 +721,7 @@ show_completion_and_start() {
     echo ""
     echo -e "${CYAN}🌐 Access points:${NC}"
     echo -e "  ${BLUE}Web Interface: http://localhost:5000${NC}"
+    echo -e "  ${BLUE}Network Access: http://$(hostname -I | awk '{print $1}'):5000${NC}"
     echo -e "  ${BLUE}API Health:    http://localhost:5000/health${NC}"
     echo ""
     
