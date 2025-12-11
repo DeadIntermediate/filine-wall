@@ -6,63 +6,59 @@ FiLine Wall is a comprehensive, hardware-powered solution that blocks robocalls,
 
 ## 🚀 Quick Installation
 
-Choose your preferred installation method:
-
-### ⚡ Quick Install from GitHub (Recommended)
+### ⚡ Recommended: Install from GitHub
 ```bash
 # One-command install - clones repo and runs complete setup
 curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/quick-install.sh | bash
 
-# Install specific branch
+# Or install specific branch
 curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/quick-install.sh | bash -s develop
 ```
 
-### 🔄 Update Existing Installation from GitHub
+**What it does:**
+- Clones FiLine Wall repository to `~/filine-wall`
+- Installs PostgreSQL 18 and Node.js 20
+- Sets up all dependencies
+- Configures database
+- Ready to use!
+
+### 🔄 Update Existing Installation
 ```bash
-# Pull latest changes and update
+# Pull latest changes from GitHub
 cd ~/filine-wall
 ./update-from-github.sh
 ```
 
-### 🐳 Docker (One Command)
-```bash
-# Download and run the Docker setup script
-curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/docker-setup.sh | bash
+**Smart updates:**
+- Auto-detects dependency changes
+- Auto-detects database schema changes
+- Safely stashes local modifications
+- Shows commit history
 
-# Or clone and run locally
-git clone https://github.com/DeadIntermediate/filine-wall.git
-cd filine-wall
-chmod +x docker-setup.sh
-./docker-setup.sh
+### 🐳 Docker Installation (Alternative)
+```bash
+# Docker-based setup
+curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/docker-setup.sh | bash
 ```
 
 ### 🖥️ Windows Installation
 ```powershell
 # Run PowerShell as Administrator
+git clone https://github.com/DeadIntermediate/filine-wall.git
+cd filine-wall
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\install.ps1
-
-# For Docker-only installation
-.\install.ps1 -DockerOnly
-
-# For Windows-native (no WSL)
-.\install.ps1 -SkipWSL
 ```
 
-### 🐧 Linux/macOS Installation
+### � Manual Installation
 ```bash
-# Make the script executable and run
-chmod +x install.sh
-./install.sh
+# Clone repository
+git clone https://github.com/DeadIntermediate/filine-wall.git
+cd filine-wall
 
-# For help and options
-./install.sh --help
-```
-
-### 🧙‍♂️ Interactive Setup Wizard
-```bash
-# Node.js-based guided configuration
-node setup-wizard.js
+# Run complete installer
+chmod +x install-complete.sh
+./install-complete.sh
 ```
 
 ## 📋 System Requirements
