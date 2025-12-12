@@ -97,6 +97,25 @@ C:\Users\YourName\filine\       (or anywhere you want!)
 - **Or:** Optional in-memory ring buffer (last 1000 lines)
 - **Web UI:** View system logs in Settings → Diagnostics
 
+**Optional Remote Logging:**
+- **Disabled by default** - Privacy first!
+- **Your own server** - Self-hosted logging endpoint
+- **Or popular services** - Better Stack, LogDNA, Datadog, etc.
+- **Encrypted transmission** - End-to-end encryption
+- **Batch uploads** - Efficient network usage
+- **Selective logging** - Choose what to send (calls/system/security)
+- **Use cases:**
+  - 📊 **Multi-device monitoring** - Monitor multiple FiLine instances
+  - 🔍 **Centralized analysis** - Aggregate stats across devices
+  - 📱 **Remote alerts** - Get notified on your phone
+  - 💾 **Cloud backup** - Automatic off-site backup
+  - 🏢 **Business deployment** - Monitor office phone systems
+- **Privacy controls:**
+  - Can anonymize phone numbers (hash before sending)
+  - Can exclude sensitive fields
+  - Can use local proxy for additional filtering
+  - Full transparency in what's sent
+
 ---
 
 ## 📦 Implementation Strategy
@@ -173,6 +192,14 @@ C:\Users\YourName\filine\       (or anywhere you want!)
 
 **Recommended:** SQLite for v4.0 (embedded), PostgreSQL optional for enterprise
 
+#### 2.4 Remote Logging Integration
+- **Optional feature** - Disabled by default for privacy
+- Encrypted batch uploads to configurable endpoint
+- Support for self-hosted server or popular logging services
+- Privacy controls: anonymization, field filtering, data minimization
+- Use cases: multi-device monitoring, cloud backup, remote alerts
+- Create open-source logging server Docker image for self-hosting
+
 ---
 
 ### Phase 3: Configuration Management (Weeks 7-8)
@@ -201,6 +228,23 @@ logging:
   # Optional: Keep last N log entries in memory for web UI
   memory_buffer: 1000
   
+  # Optional: Send logs to remote server
+  remote:
+    enabled: false
+    url: "https://your-server.com/api/logs"  # Your own server
+    # Or use popular services:
+    # url: "https://logs.betterstack.com/..."  # Better Stack
+    # url: "https://api.logdna.com/..."        # LogDNA
+    # url: "https://http-intake.logs.datadoghq.com/..."  # Datadog
+    auth_token: "your-api-key"
+    batch_size: 100  # Send logs in batches
+    interval: 60     # Seconds between uploads
+    include:
+      - "call_logs"     # Call records
+      - "system_logs"   # Errors/warnings
+      - "security_logs" # Auth attempts, blocks
+    encrypt: true       # Encrypt before sending
+  
 security:
   jwt_secret: "auto-generated-on-first-run"
   encryption_key: "auto-generated-on-first-run"
@@ -223,6 +267,12 @@ export:
   format: "csv"  # csv, json, or pdf
   directory: "./exports"
   schedule: "monthly"
+
+analytics:
+  # Optional: Send anonymized stats to help improve FiLine
+  telemetry: false
+  endpoint: "https://telemetry.filine.dev/v1/stats"
+  anonymous_id: "auto-generated-uuid"
 ```
 
 #### 3.2 Auto-Configuration
@@ -882,6 +932,66 @@ Beyond minimal footprint, consider:
 - Recommended: $99/year (macOS code signing only)
 - Optional: $200-400/year (if also signing Windows, but not needed for portable)
 - Testing hardware: $1000-2000 one-time (if purchasing new)
+
+---
+
+## 🔒 Security & Privacy
+
+### Binary Security
+- **macOS:** Code signing required (prevents Gatekeeper warnings)
+- **Windows:** Optional signing (portable apps often run unsigned)
+- **Linux:** No signing needed (open ecosystem)
+- Reproducible builds for supply chain security
+- Automated security scanning in CI/CD
+
+### Database Security
+- Encryption at rest for SQLite database
+- OS keychain integration for secure key storage
+- Automatic schema migrations with integrity checks
+- Configurable retention policies
+
+### Network Security
+- HTTPS only for web interface
+- Built-in rate limiting
+- JWT token authentication
+- CSRF protection
+- Firewall-friendly (single port)
+
+### Remote Logging Privacy
+
+**Privacy-First Design:**
+- ✅ **Disabled by default** - Completely opt-in
+- ✅ **Your data, your server** - Self-host or choose your provider
+- ✅ **End-to-end encryption** - TLS + application-level encryption
+- ✅ **Data minimization** - Only send what you configure
+- ✅ **No third parties** - Direct to your chosen endpoint only
+
+**Anonymization Options:**
+- Hash phone numbers before transmission
+- Strip caller names and addresses
+- Remove voice transcripts/recordings
+- Send only statistical summaries
+- Configurable field filtering
+
+**Self-Hosting:**
+- Open-source logging server (Docker image provided)
+- Deploy on your own infrastructure
+- Complete control over data storage
+- No external dependencies
+- Full audit trail of what's sent
+
+**Compliance:**
+- **GDPR compliant:** Data minimization, right to erasure, consent-based
+- **CCPA compliant:** Opt-in only, data transparency
+- **On-premise ready:** Can be deployed entirely within your network
+- **Audit logs:** Track exactly what was sent and when
+
+**Use Cases:**
+- 📊 Monitor multiple FiLine instances from one dashboard
+- 🏢 Business/office deployment with centralized logging
+- 📱 Mobile alerts for important calls (via webhook)
+- 💾 Cloud backup of call history
+- 🔍 Cross-device analytics and reporting
 
 ---
 
