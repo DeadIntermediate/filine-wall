@@ -66,12 +66,19 @@ Same codebase, same features, platform-native installation.
 
 #### Windows
 ```
-C:\Program Files\FiLine\
+# Portable - no installation required!
+# Just download and run from any folder
+
+C:\Users\YourName\filine\
 ├── filine.exe                  (single binary ~50MB)
-├── config.yaml                 (user configuration)
+├── config.yaml                 (auto-created on first run)
 └── .version                    (version tracker)
 
-C:\ProgramData\FiLine\
+# Or run from anywhere
+C:\Downloads\filine.exe         (works from any location!)
+
+# Data stored in user profile
+%APPDATA%\FiLine\
 ├── logs\                       (call logs by date)
 │   ├── calls\
 │   │   ├── 2026-01-15.log
@@ -82,6 +89,7 @@ C:\ProgramData\FiLine\
 ```
 
 **Total:** ~50MB + runtime data (95% reduction) - **All platforms**
+**Windows Note:** Fully portable - no installer, no admin rights needed!
 
 ---
 
@@ -220,25 +228,39 @@ features:
 curl -fsSL https://install.filine.app | bash
 ```
 
-**Windows Installation:**
+**Windows Installation (Portable - No Installer!):**
 ```powershell
-# PowerShell (as Administrator)
-irm https://install.filine.app/windows | iex
+# Method 1: Download and run (simplest)
+# Just download filine.exe and double-click or run in PowerShell:
+.\filine.exe
 
-# Or download installer
-# FiLine-Setup-4.0.0.exe (GUI installer)
+# Method 2: One-line install to PATH
+irm https://install.filine.app/windows | iex
+# This downloads filine.exe to %LOCALAPPDATA%\FiLine\ and adds to PATH
+
+# Method 3: Direct download
+# Download from: https://github.com/DeadIntermediate/filine-wall/releases
+# Run from anywhere - no installation needed!
 ```
 
-**What it does:**
+**What it does (Windows):**
+- Downloads single `filine.exe` binary
+- Creates `%APPDATA%\FiLine\` for data/logs automatically on first run
+- Optionally adds to PATH for convenience
+- **No admin rights required**
+- **No installer, no registry entries**
+- **100% portable** - can run from USB stick!
+
+**What it does (Linux/macOS):**
 1. Detects OS and architecture automatically
 2. Downloads appropriate pre-built binary
 3. Creates platform-specific directories
 4. Generates `config.yaml` with platform defaults
-5. Sets up service (systemd/launchd/Windows Service)
+5. Sets up service (systemd/launchd)
 6. Configures firewall rules
 7. Starts FiLine Wall
 
-**Total time:** 10-30 seconds (vs. 5-10 minutes currently) - **All platforms**
+**Total time:** 10-30 seconds (all platforms) - **Windows: instant if just running .exe!**
 
 #### 4.2 Update Process
 
@@ -249,33 +271,52 @@ filine update
 sudo filine update
 ```
 
-**Windows:**
+**Windows (Portable):**
 ```powershell
-# PowerShell (as Administrator)
-filine update
+# Run from Command Prompt or PowerShell
+filine.exe update
 
-# Or use GUI updater
-FiLine-Updater.exe
+# Or manually download new version and replace .exe
+# Old version: filine-old.exe (rename current)
+# New version: Download and rename to filine.exe
+# Zero downtime, instant rollback if needed
 ```
 
 **Features:**
 - Built-in update command (cross-platform)
 - Auto-detects architecture
 - Downloads latest binary for your platform
-- Preserves config.yaml
-- Restarts service automatically
-- Rollback on failure
-- Optional GUI updater for Windows/macOS
+- Preserves config.yaml and data
+- **Windows:** Can update while running (downloads to temp, swaps on restart)
+- Automatic rollback on failure
+- **No installer needed on Windows** - just replace the .exe!
 
 #### 4.3 Uninstall Process
+
+**Linux/macOS:**
 ```bash
 filine uninstall --keep-logs
 ```
 
-- Removes `/opt/filine/`
-- Optionally removes `/var/log/filine/`
-- Removes systemd service
-- Clean system state
+**Windows (Portable):**
+```powershell
+# Just delete the files - that's it!
+del filine.exe
+rmdir /s %APPDATA%\FiLine
+
+# Or use built-in cleanup
+filine.exe uninstall --clean-all
+
+# Want to keep it portable? Just delete filine.exe
+# Data stays in %APPDATA%\FiLine\ for later
+```
+
+**Features:**
+- Removes application binary
+- Optionally removes data/logs
+- **Windows:** No registry cleanup needed (because nothing was installed!)
+- **Windows:** True portable app - delete and done
+- Clean system state on all platforms
 
 ---
 
@@ -308,26 +349,27 @@ platforms:
 
 #### 5.2 Release Artifacts
 ```
-# Binary executables
+# Binary executables (portable - no installers!)
 filine-v4.0.0-linux-arm64
 filine-v4.0.0-linux-arm
 filine-v4.0.0-linux-x64
 filine-v4.0.0-macos-arm64
 filine-v4.0.0-macos-x64
-filine-v4.0.0-windows-x64.exe
-filine-v4.0.0-windows-arm64.exe
+filine-v4.0.0-windows-x64.exe       # Portable .exe
+filine-v4.0.0-windows-arm64.exe     # Portable .exe
 
-# Platform-specific installers
-FiLine-Setup-4.0.0.exe          # Windows installer
-FiLine-4.0.0.dmg                # macOS disk image
+# Linux package installers (optional)
+FiLine-4.0.0.dmg                # macOS disk image (optional)
 filine_4.0.0_amd64.deb          # Debian/Ubuntu package
 filine-4.0.0-1.x86_64.rpm       # RedHat/Fedora package
 filine_4.0.0_arm64.deb          # Raspberry Pi package
 
 # Install scripts
 install.sh                       # Linux/macOS
-install.ps1                      # Windows PowerShell
+install.ps1                      # Windows (optional - just downloads .exe)
 checksums.txt                    # SHA256 hashes
+
+# Windows: NO MSI, NO SETUP.EXE - Just portable .exe files!
 ```
 
 ---
@@ -419,33 +461,50 @@ launchctl list | grep filine
 ### Windows
 **Strengths:**
 - Large user base
-- GUI installer expectations met
-- Windows Service for background operation
-- Good USB serial support
+- **Perfect for portable applications**
+- Good USB serial support (COM ports)
+- Command Prompt / PowerShell ready
+- Can run from any folder (Desktop, Downloads, USB stick)
 
 **Challenges:**
 - Different path conventions (`C:\` vs `/`)
 - COM ports instead of `/dev/tty*`
-- Windows Defender / SmartScreen warnings
-- Code signing recommended (but optional)
+- ~~Windows Defender / SmartScreen warnings~~ (Only for unsigned .exe on first download)
+- ~~Code signing recommended~~ (Optional - can be bypassed with right-click → Run anyway)
 
-**Service Management:**
+**No Service Management Needed:**
 ```powershell
-# Windows Service
-Start-Service FiLine
-Set-Service FiLine -StartupType Automatic
-Get-Service FiLine
+# Just run it!
+cd C:\Users\YourName\Downloads
+.\filine.exe
+
+# Run in background
+Start-Process filine.exe -WindowStyle Hidden
+
+# Or add to startup (optional)
+# Copy filine.exe to: shell:startup folder
 ```
 
 **Distribution:**
-- MSI installer (recommended)
-- EXE installer (alternative)
-- Chocolatey package: `choco install filine`
-- Optional: Microsoft Store (requires registration)
+- **Direct .exe download** (recommended) - Just run it!
+- Chocolatey package: `choco install filine` (optional convenience)
+- ~~No MSI installer~~ 
+- ~~No Windows Service~~
+- ~~No Microsoft Store~~ (too complex for portable app)
+- **Run from anywhere** - Desktop, Downloads, USB stick, network drive
+
+**Portable Benefits:**
+✅ **No admin rights needed** - Run as regular user  
+✅ **No installation** - Just download and run  
+✅ **Easy updates** - Replace .exe file, done  
+✅ **USB stick compatible** - Run from removable media  
+✅ **Clean uninstall** - Delete .exe, optionally delete %APPDATA%\FiLine\  
+✅ **No registry entries** - Leaves system pristine  
 
 **Firewall:**
-- Auto-configure Windows Firewall rules during install
-- Allow inbound port 5000 for web interface
+- Windows Firewall may prompt on first run (normal for any app)
+- User can allow manually (one-time prompt)
+- No automatic firewall configuration (requires admin)
 
 ### Platform-Specific Features
 
@@ -454,10 +513,11 @@ Get-Service FiLine
 - Menu bar icon with quick actions
 - "Open Dashboard", "View Logs", "Preferences", "Quit"
 
-**Windows:**
-- System tray icon
+**Windows (Optional - not required for portable):**
+- Could add system tray icon if filine.exe runs in background
 - Right-click menu for common actions
 - Balloon notifications for blocked calls
+- **But not required** - can run in terminal window
 
 **Linux (Optional):**
 - GTK indicator for desktop users
@@ -465,8 +525,25 @@ Get-Service FiLine
 
 #### Notifications
 - **macOS:** Native notifications via `node-notifier`
-- **Windows:** Toast notifications
+- **Windows:** Console output or optional toast notifications
 - **Linux:** libnotify / D-Bus notifications
+
+#### Background Execution
+**Windows Portable Options:**
+```powershell
+# Option 1: Run in visible console (simple)
+.\filine.exe
+
+# Option 2: Run hidden in background
+Start-Process filine.exe -WindowStyle Hidden
+
+# Option 3: Run as scheduled task (persistent across reboots)
+# User creates scheduled task via Task Scheduler GUI
+# No admin needed - runs on user login
+
+# Option 4: Just keep terminal open
+# Open PowerShell, run filine.exe, minimize window
+```
 
 ---
 
@@ -486,13 +563,15 @@ Get-Service FiLine
 - [ ] Cross-platform modem interface (serialport library)
 - [ ] Database migrations working (SQLite)
 - [ ] Web UI accessible on all platforms
-- [ ] Platform-specific installers created
-- [ ] Service management (systemd/launchd/Windows Service)
+- [ ] Linux/macOS: Service management (systemd/launchd)
+- [ ] Windows: Portable execution (no service needed)
 
 ### Milestone 3: Production Ready (Week 12)
 - [ ] Automated builds for all 7 platforms
-- [ ] Code signing (macOS and Windows)
-- [ ] Platform-specific installers (DMG, MSI, DEB, RPM)
+- [ ] Code signing for macOS (optional for Windows)
+- [ ] Linux packages: DEB, RPM
+- [ ] macOS: DMG installer (optional)
+- [ ] Windows: Portable .exe (no installer!)
 - [ ] Install/update/uninstall scripts for all platforms
 - [ ] Documentation updated for all platforms
 - [ ] Migration guide from v2.0
@@ -763,16 +842,17 @@ Beyond minimal footprint, consider:
   - 1 Windows 10/11 PC
 - Cloud storage for binary hosting (~5GB for all platforms)
 
-### Code Signing (Optional but Recommended)
+### Code Signing (Optional)
 - **Apple Developer Account:** $99/year
   - Required for macOS code signing
   - Prevents Gatekeeper warnings
   - Required for Mac App Store
   
-- **Windows Code Signing Certificate:** $100-300/year
-  - Prevents SmartScreen warnings
-  - Builds trust with Windows users
-  - Not strictly required but highly recommended
+- **Windows Code Signing Certificate:** $100-300/year (OPTIONAL)
+  - ~~Prevents SmartScreen warnings~~ (Users can bypass with right-click)
+  - ~~Builds trust with Windows users~~ (Portable apps don't need this)
+  - **Not needed for portable .exe** - Users expect to click "Run anyway"
+  - Only needed if distributing via Microsoft Store
 
 ### Infrastructure
 - GitHub Actions CI/CD (free tier sufficient for public repos)
@@ -781,8 +861,9 @@ Beyond minimal footprint, consider:
 - Optional: CDN for install scripts (Cloudflare - free tier)
 
 **Total Cost:** 
-- Minimum: $0 (developer time only)
-- Recommended: $200-400/year (code signing certificates)
+- Minimum: $0 (developer time only, Windows portable needs no signing)
+- Recommended: $99/year (macOS code signing only)
+- Optional: $200-400/year (if also signing Windows, but not needed for portable)
 - Testing hardware: $1000-2000 one-time (if purchasing new)
 
 ---
