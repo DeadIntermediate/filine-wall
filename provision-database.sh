@@ -14,8 +14,8 @@ echo ""
 if ! command -v psql &> /dev/null; then
     echo -e "${RED}❌ PostgreSQL is not installed!${NC}"
     echo -e "${YELLOW}Installing PostgreSQL...${NC}"
-    sudo apt update
-    sudo apt install -y postgresql postgresql-contrib
+    sudo apt-get update
+    sudo apt-get install -y postgresql postgresql-contrib
     
     # Start PostgreSQL - try version-specific service first
     POSTGRES_VERSION=$(psql --version 2>/dev/null | grep -oP '\d+' | head -1)

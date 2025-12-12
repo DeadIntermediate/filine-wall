@@ -104,7 +104,7 @@ update_system() {
     case $OS in
         "debian")
             log_progress "Updating package lists..."
-            sudo apt update -qq
+            sudo apt-get update -qq
             log_info "Package lists updated"
             ;;
         "macos")
@@ -173,7 +173,7 @@ install_postgresql() {
             echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | \
                 sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
             
-            sudo apt update -qq
+            sudo apt-get update -qq
             
             log_progress "Installing PostgreSQL $POSTGRES_VERSION..."
             sudo DEBIAN_FRONTEND=noninteractive apt install -y postgresql-${POSTGRES_VERSION} postgresql-contrib-${POSTGRES_VERSION} 2>&1 | grep -E "(Setting up|Processing)" || true
@@ -212,7 +212,7 @@ install_nodejs() {
             curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | sudo -E bash - > /dev/null 2>&1
             
             log_progress "Installing Node.js..."
-            sudo apt install -y nodejs > /dev/null 2>&1
+            sudo apt-get install -y nodejs > /dev/null 2>&1
             ;;
         "macos")
             log_progress "Installing Node.js..."
@@ -776,7 +776,7 @@ handle_error() {
     echo -e "  1. Run with sudo if permissions denied"
     echo -e "  2. Ensure internet connection"
     echo -e "  3. Check if PostgreSQL is installed"
-    echo -e "  4. Try: ${CYAN}sudo apt update && sudo apt upgrade${NC}"
+    echo -e "  4. Try: ${CYAN}sudo apt-get update && sudo apt-get upgrade${NC}"
     echo ""
     exit 1
 }

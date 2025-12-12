@@ -51,7 +51,7 @@ if command -v psql &> /dev/null; then
     fi
 else
     echo -e "${RED}  ✗${NC} PostgreSQL not installed!"
-    echo -e "${YELLOW}  Fix: sudo apt install postgresql${NC}"
+    echo -e "${YELLOW}  Fix: sudo apt-get install postgresql${NC}"
     ISSUES_FOUND=$((ISSUES_FOUND + 1))
 fi
 
