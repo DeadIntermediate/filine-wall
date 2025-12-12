@@ -122,7 +122,7 @@ install_system_deps() {
     case $OS in
         "debian")
             log_progress "Installing essential packages..."
-            sudo DEBIAN_FRONTEND=noninteractive apt install -y \
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
                 curl \
                 wget \
                 git \
@@ -162,7 +162,7 @@ install_postgresql() {
             log_progress "Adding PostgreSQL repository..."
             
             # Install required packages for adding repository
-            sudo DEBIAN_FRONTEND=noninteractive apt install -y wget gnupg2 lsb-release 2>&1 | grep -E "(Setting up|Processing)" || true
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y wget gnupg2 lsb-release 2>&1 | grep -E "(Setting up|Processing)" || true
             
             # Add PostgreSQL GPG key using the new method
             sudo mkdir -p /etc/apt/keyrings
@@ -176,7 +176,7 @@ install_postgresql() {
             sudo apt-get update -qq
             
             log_progress "Installing PostgreSQL $POSTGRES_VERSION..."
-            sudo DEBIAN_FRONTEND=noninteractive apt install -y postgresql-${POSTGRES_VERSION} postgresql-contrib-${POSTGRES_VERSION} 2>&1 | grep -E "(Setting up|Processing)" || true
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-${POSTGRES_VERSION} postgresql-contrib-${POSTGRES_VERSION} 2>&1 | grep -E "(Setting up|Processing)" || true
             
             log_progress "Starting PostgreSQL service..."
             sudo systemctl start postgresql@${POSTGRES_VERSION}-main 2>/dev/null || sudo systemctl start postgresql
