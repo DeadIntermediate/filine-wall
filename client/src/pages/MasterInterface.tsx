@@ -77,7 +77,7 @@ export default function MasterInterface() {
 
   // Select first device by default
   useEffect(() => {
-    if (devices.length > 0 && !selectedDeviceId) {
+    if (devices.length > 0 && !selectedDeviceId && devices[0]) {
       setSelectedDeviceId(devices[0].deviceId);
     }
   }, [devices, selectedDeviceId]);
