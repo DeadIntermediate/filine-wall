@@ -156,27 +156,51 @@ install_postgresql() {
     
     case $OS in
         "debian")
-            log_progress "Cleaning up old PostgreSQL repository..."
-            sudo rm -f /etc/apt/sources.list.d/pgdg.list 2>/dev/null || true
+            # Detect system architecture
+            ARCH=$(dpkg --print-architecture)
+            log_info "Detected architecture: $ARCH"
             
-            log_progress "Adding PostgreSQL repository..."
-            
-            # Install required packages for adding repository
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y wget gnupg2 lsb-release 2>&1 | grep -E "(Setting up|Processing)" || true
-            
-            # Add PostgreSQL GPG key using the new method
-            sudo mkdir -p /etc/apt/keyrings
-            wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
-                sudo gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg 2>/dev/null || true
-            
-            # Add PostgreSQL repository with signed-by option
-            echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | \
-                sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
-            
-            sudo apt-get update -qq
-            
-            log_progress "Installing PostgreSQL $POSTGRES_VERSION..."
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-${POSTGRES_VERSION} postgresql-contrib-${POSTGRES_VERSION} 2>&1 | grep -E "(Setting up|Processing)" || true
+            # Check if PostgreSQL repo supports this architecture
+            if [ "$ARCH" = "armhf" ]; then
+                log_warning "PostgreSQL official repo doesn't support armhf (32-bit ARM)"
+                log_warning "Installing PostgreSQL from Debian repositories instead..."
+                
+                # Remove any existing pgdg repo
+                sudo rm -f /etc/apt/sources.list.d/pgdg.list 2>/dev/null || true
+                sudo apt-get update -qq
+                
+                # Install whatever PostgreSQL version is available from Debian
+                log_progress "Installing PostgreSQL from Debian repos..."
+                sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql postgresql-contrib 2>&1 | grep -E "(Setting up|Processing)" || true
+                
+                # Get the actual installed version
+                INSTALLED_PG_VERSION=$(psql --version 2>/dev/null | grep -oP '\d+' | head -1 || echo "unknown")
+                log_info "Installed PostgreSQL version: $INSTALLED_PG_VERSION"
+                
+            else
+                # For arm64, amd64, etc. - use official PostgreSQL repo
+                log_progress "Cleaning up old PostgreSQL repository..."
+                sudo rm -f /etc/apt/sources.list.d/pgdg.list 2>/dev/null || true
+                
+                log_progress "Adding PostgreSQL repository..."
+                
+                # Install required packages for adding repository
+                sudo DEBIAN_FRONTEND=noninteractive apt-get install -y wget gnupg2 lsb-release 2>&1 | grep -E "(Setting up|Processing)" || true
+                
+                # Add PostgreSQL GPG key using the new method
+                sudo mkdir -p /etc/apt/keyrings
+                wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
+                    sudo gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg 2>/dev/null || true
+                
+                # Add PostgreSQL repository with signed-by option
+                echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | \
+                    sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+                
+                sudo apt-get update -qq
+                
+                log_progress "Installing PostgreSQL $POSTGRES_VERSION..."
+                sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-${POSTGRES_VERSION} postgresql-contrib-${POSTGRES_VERSION} 2>&1 | grep -E "(Setting up|Processing)" || true
+            fi
             
             log_progress "Starting PostgreSQL service..."
             sudo systemctl start postgresql@${POSTGRES_VERSION}-main 2>/dev/null || sudo systemctl start postgresql
