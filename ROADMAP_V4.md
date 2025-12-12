@@ -9,11 +9,12 @@
 ## 🎯 Primary Goals
 
 ### 1. Minimal Filesystem Footprint
-**Vision:** FiLine Wall should run with only TWO folders on the host system:
-- `/opt/filine/` (Linux/macOS) or `C:\Program Files\FiLine\` (Windows) - Application binaries and configuration
-- `/var/log/filine/` (Linux/macOS) or `C:\ProgramData\FiLine\logs\` (Windows) - Call logs and system logs
+**Vision:** FiLine Wall should run with **ONLY ONE FOLDER** containing just the application:
+- `/opt/filine/` (Linux/macOS) or `C:\Users\YourName\filine\` (Windows) - Application binary and config only
+- **NO log files on disk** - All call logs stored in database only
+- **NO separate data folders** - Everything in one place
 
-Everything else (node_modules, dependencies, build artifacts) should be containerized or bundled into a single binary.
+Everything else (node_modules, dependencies, build artifacts, logs) should be containerized, bundled, or stored in the database.
 
 ### 2. Cross-Platform Support
 **Vision:** Single installation experience across all major operating systems:
@@ -27,7 +28,7 @@ Same codebase, same features, platform-native installation.
 
 ## 🏗️ Architecture Changes
 
-### Current State (v2.0.0)
+**Current State (v2.0.0)**
 ```
 ~/filine-wall/
 ├── node_modules/          (1.1GB - largest footprint)
@@ -36,60 +37,65 @@ Same codebase, same features, platform-native installation.
 ├── device-client/         (40KB - Python modem interface)
 ├── db/                    (40KB - Database schema)
 ├── dist/                  (1.3MB - Built artifacts)
-├── logs/                  (varies - call logs)
+├── logs/                  (varies - call logs as text files)
 ├── uploads/               (varies - user uploads)
 ├── models/                (varies - ML models)
 ├── .env                   (config file)
 └── [50+ other files]      (~2MB docs/scripts)
 ```
 
-**Total:** ~1.2GB + runtime data
+**Total:** ~1.2GB + scattered log files + runtime data
 
 ### Target State (v4.0.0)
 
 #### Linux & macOS
 ```
-/opt/filine/                    (macOS: /Applications/FiLine.app/)
+/opt/filine/                    (macOS: ~/filine/ or /Applications/FiLine.app/)
 ├── filine                      (single binary ~50MB)
 ├── config.yaml                 (user configuration)
+├── filine.db                   (SQLite database - includes all call logs)
 └── .version                    (version tracker)
-
-/var/log/filine/
-├── calls/                      (call logs by date)
-│   ├── 2026-01-15.log
-│   └── 2026-01-16.log
-└── system.log                  (application logs)
-
-/var/lib/filine/                (optional - database if not using external)
-└── database/
 ```
+
+**That's it! Just ONE folder with 4 files.**
 
 #### Windows
 ```
-# Portable - no installation required!
-# Just download and run from any folder
-
-C:\Users\YourName\filine\
+C:\Users\YourName\filine\       (or anywhere you want!)
 ├── filine.exe                  (single binary ~50MB)
-├── config.yaml                 (auto-created on first run)
+├── config.yaml                 (user configuration)
+├── filine.db                   (SQLite database - includes all call logs)
 └── .version                    (version tracker)
-
-# Or run from anywhere
-C:\Downloads\filine.exe         (works from any location!)
-
-# Data stored in user profile
-%APPDATA%\FiLine\
-├── logs\                       (call logs by date)
-│   ├── calls\
-│   │   ├── 2026-01-15.log
-│   │   └── 2026-01-16.log
-│   └── system.log
-└── database\                   (optional)
-    └── filine.db
 ```
 
-**Total:** ~50MB + runtime data (95% reduction) - **All platforms**
-**Windows Note:** Fully portable - no installer, no admin rights needed!
+**That's it! Just ONE folder with 4 files.**
+
+**Total:** ~50MB + database size (typically 5-10MB for months of calls)
+
+### Call Log Storage Strategy
+
+**Database-Only Approach:**
+- All call logs stored in SQLite database
+- No separate log files on disk
+- Query via web interface or SQL directly
+- Export options: CSV, JSON, PDF for archival
+- Automatic cleanup: Keep last 90 days by default (configurable)
+- Full-text search built-in
+
+**Benefits:**
+- ✅ **Zero log files** - Everything in database
+- ✅ **Faster queries** - Indexed database vs text parsing
+- ✅ **Easy backup** - Single filine.db file
+- ✅ **Portable** - Copy folder = full backup
+- ✅ **Clean system** - No scattered files
+- ✅ **Built-in rotation** - Automatic old data cleanup
+
+**System Logs (Application Errors):**
+- **Console output only** - No log files
+- **Windows:** Visible in PowerShell/CMD window
+- **Linux/macOS:** Output to systemd journal or syslog
+- **Or:** Optional in-memory ring buffer (last 1000 lines)
+- **Web UI:** View system logs in Settings → Diagnostics
 
 ---
 
@@ -175,7 +181,7 @@ C:\Downloads\filine.exe         (works from any location!)
 Replace `.env` with structured `config.yaml`:
 
 ```yaml
-# /opt/filine/config.yaml
+# /opt/filine/config.yaml (or wherever filine binary is located)
 filine:
   version: "4.0.0"
   
@@ -184,25 +190,25 @@ server:
   host: "0.0.0.0"
   
 database:
-  type: "sqlite"  # or "postgresql"
-  path: "/var/lib/filine/database/filine.db"
-  # url: "postgresql://..." for external DB
+  # Database is always in same folder as binary
+  path: "./filine.db"
+  retention_days: 90  # Auto-delete calls older than this
   
 logging:
   level: "info"
-  directory: "/var/log/filine"
-  rotation:
-    enabled: true
-    max_size: "100MB"
-    max_age: "30d"
-    
+  # No log files! Output to console/journal only
+  console: true
+  # Optional: Keep last N log entries in memory for web UI
+  memory_buffer: 1000
+  
 security:
   jwt_secret: "auto-generated-on-first-run"
   encryption_key: "auto-generated-on-first-run"
   
 modem:
   enabled: true
-  port: "/dev/ttyUSB0"
+  port: "/dev/ttyUSB0"  # Linux/macOS
+  # port: "COM3"        # Windows auto-detected
   baud_rate: 115200
   auto_detect: true
   
@@ -210,6 +216,13 @@ features:
   voice_analysis: true
   nlp_detection: true
   ivr: true
+
+export:
+  # Export call logs for archival/backup
+  auto_export: false
+  format: "csv"  # csv, json, or pdf
+  directory: "./exports"
+  schedule: "monthly"
 ```
 
 #### 3.2 Auto-Configuration
@@ -245,7 +258,9 @@ irm https://install.filine.app/windows | iex
 
 **What it does (Windows):**
 - Downloads single `filine.exe` binary
-- Creates `%APPDATA%\FiLine\` for data/logs automatically on first run
+- Creates `config.yaml` and `filine.db` in same folder on first run
+- **No separate data folders**
+- **No log files** - all data in database
 - Optionally adds to PATH for convenience
 - **No admin rights required**
 - **No installer, no registry entries**
@@ -254,10 +269,10 @@ irm https://install.filine.app/windows | iex
 **What it does (Linux/macOS):**
 1. Detects OS and architecture automatically
 2. Downloads appropriate pre-built binary
-3. Creates platform-specific directories
+3. Creates installation directory
 4. Generates `config.yaml` with platform defaults
-5. Sets up service (systemd/launchd)
-6. Configures firewall rules
+5. Creates empty `filine.db` database
+6. Sets up service (systemd/launchd)
 7. Starts FiLine Wall
 
 **Total time:** 10-30 seconds (all platforms) - **Windows: instant if just running .exe!**
@@ -286,10 +301,10 @@ filine.exe update
 - Built-in update command (cross-platform)
 - Auto-detects architecture
 - Downloads latest binary for your platform
-- Preserves config.yaml and data
+- Preserves config.yaml and database
 - **Windows:** Can update while running (downloads to temp, swaps on restart)
 - Automatic rollback on failure
-- **No installer needed on Windows** - just replace the .exe!
+- **No log files to preserve** - everything in database!
 
 #### 4.3 Uninstall Process
 
@@ -300,22 +315,21 @@ filine uninstall --keep-logs
 
 **Windows (Portable):**
 ```powershell
-# Just delete the files - that's it!
-del filine.exe
-rmdir /s %APPDATA%\FiLine
+# Just delete the folder - that's it!
+rmdir /s C:\Users\YourName\filine
 
 # Or use built-in cleanup
-filine.exe uninstall --clean-all
+filine.exe uninstall
 
-# Want to keep it portable? Just delete filine.exe
-# Data stays in %APPDATA%\FiLine\ for later
+# Everything in one place - no scattered files!
 ```
 
 **Features:**
 - Removes application binary
-- Optionally removes data/logs
+- Optionally backs up database before deleting
 - **Windows:** No registry cleanup needed (because nothing was installed!)
-- **Windows:** True portable app - delete and done
+- **Windows:** True portable app - delete folder and done
+- **No log files to clean** - everything in database
 - Clean system state on all platforms
 
 ---
@@ -601,12 +615,15 @@ Start-Process filine.exe -WindowStyle Hidden
 | Metric | v2.0.0 (Linux) | v4.0.0 Target (All Platforms) | Improvement |
 |--------|----------------|-------------------------------|-------------|
 | **Installation Time** | 5-10 min | 10-30 sec | **95% faster** |
-| **Disk Usage** | 1.2GB | 50MB | **95% smaller** |
-| **Files on Disk** | 50,000+ | <10 | **99.9% fewer** |
+| **Disk Usage** | 1.2GB | 50MB + database | **95% smaller** |
+| **Files on Disk** | 50,000+ | 4 files | **99.99% fewer** |
+| **Folders Required** | 5+ folders | 1 folder | **80% fewer** |
+| **Log Files** | Hundreds of .log files | 0 (database only) | **100% eliminated** |
 | **Supported Platforms** | Linux only | Linux, macOS, Windows | **3x platforms** |
 | **Dependencies** | Node.js, npm, PostgreSQL, Python | None (embedded) | **100% self-contained** |
 | **Update Time** | 3-5 min | 10 sec | **97% faster** |
-| **Uninstall Cleanliness** | Manual cleanup needed | One command | **100% clean** |
+| **Backup Complexity** | Multiple folders and files | Copy 1 folder | **100% simpler** |
+| **Uninstall Cleanliness** | Manual cleanup needed | Delete 1 folder | **100% clean** |
 | **Binary Size** | N/A | 50MB per platform | **Optimized** |
 
 ---
