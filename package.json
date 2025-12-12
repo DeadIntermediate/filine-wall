@@ -5,9 +5,9 @@
   "license": "MIT",
   "scripts": {
     "setup": "node -e \"console.log('Running setup...')\" && npm install && npm run db:push",
-    "start:dev": "tsx server/index.ts",
+    "start:dev": "tsx --env-file=.env server/index.ts",
     "start:prod": "NODE_ENV=production node dist/index.js",
-    "dev": "tsx server/index.ts",
+    "dev": "tsx --env-file=.env server/index.ts",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
