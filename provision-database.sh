@@ -16,8 +16,21 @@ if ! command -v psql &> /dev/null; then
     echo -e "${YELLOW}Installing PostgreSQL...${NC}"
     sudo apt update
     sudo apt install -y postgresql postgresql-contrib
-    sudo systemctl start postgresql
-    sudo systemctl enable postgresql
+    
+    # Start PostgreSQL - try version-specific service first
+    POSTGRES_VERSION=$(psql --version 2>/dev/null | grep -oP '\d+' | head -1)
+    sudo systemctl start postgresql@${POSTGRES_VERSION}-main 2>/dev/null || \
+    sudo systemctl start postgresql 2>/dev/null || true
+    sudo systemctl enable postgresql 2>/dev/null || true
+else
+    # Ensure PostgreSQL is running
+    POSTGRES_VERSION=$(psql --version 2>/dev/null | grep -oP '\d+' | head -1)
+    if ! sudo systemctl is-active --quiet postgresql@${POSTGRES_VERSION}-main 2>/dev/null && \
+       ! sudo systemctl is-active --quiet postgresql 2>/dev/null; then
+        echo -e "${YELLOW}⚠️  PostgreSQL is not running. Starting it...${NC}"
+        sudo systemctl start postgresql@${POSTGRES_VERSION}-main 2>/dev/null || \
+        sudo systemctl start postgresql 2>/dev/null || true
+    fi
 fi
 
 # Generate a secure random password

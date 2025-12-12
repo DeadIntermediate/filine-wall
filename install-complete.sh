@@ -263,6 +263,8 @@ setup_postgresql() {
     case $OS in
         "debian")
             log_progress "Starting PostgreSQL service..."
+            # Try version-specific service first, then generic
+            sudo systemctl start postgresql@${POSTGRES_VERSION}-main 2>/dev/null || \
             sudo systemctl start postgresql 2>/dev/null || true
             sudo systemctl enable postgresql 2>/dev/null || true
             sleep 2
