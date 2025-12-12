@@ -263,10 +263,17 @@ setup_postgresql() {
     case $OS in
         "debian")
             log_progress "Starting PostgreSQL service..."
-            # Try version-specific service first, then generic
-            sudo systemctl start postgresql@${POSTGRES_VERSION}-main 2>/dev/null || \
-            sudo systemctl start postgresql 2>/dev/null || true
-            sudo systemctl enable postgresql 2>/dev/null || true
+            # Try version-specific service first (postgresql@18-main), then generic
+            if sudo systemctl start postgresql@${POSTGRES_VERSION}-main 2>/dev/null; then
+                log_info "Started PostgreSQL ${POSTGRES_VERSION} service"
+                sudo systemctl enable postgresql 2>/dev/null || true
+            elif sudo systemctl start postgresql 2>/dev/null; then
+                log_info "Started generic PostgreSQL service"
+                sudo systemctl enable postgresql 2>/dev/null || true
+            else
+                log_warning "Could not start PostgreSQL service automatically"
+                log_warning "You may need to start it manually: sudo systemctl start postgresql@${POSTGRES_VERSION}-main"
+            fi
             sleep 2
             ;;
         "macos")
