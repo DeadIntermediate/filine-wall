@@ -61,11 +61,16 @@ class AudioContextManager {
 
 // Voice Analysis Model Manager
 class VoiceModelManager {
-  private static model: tf.LayersModel | null = null;
+  private static model: any = null;
   private static isTraining = false;
   private static isDevelopmentMode = process.env.NODE_ENV === 'development';
 
-  static async ensureModelLoaded(): Promise<tf.LayersModel> {
+  static async ensureModelLoaded(): Promise<any> {
+    if (!tf) {
+      console.warn('TensorFlow not available - voice analysis model disabled');
+      return null;
+    }
+    
     if (this.model) return this.model;
 
     try {
@@ -86,7 +91,9 @@ class VoiceModelManager {
     return this.model;
   }
 
-  private static createModel(): tf.LayersModel {
+  private static createModel(): any {
+    if (!tf) return null;
+    
     const model = tf.sequential({
       layers: [
         tf.layers.dense({ inputShape: [13], units: 64, activation: 'relu' }),

@@ -41,9 +41,14 @@ export interface VoiceAnalysisResult {
 }
 
 // Initialize TensorFlow model for audio analysis
-let audioModel: tf.LayersModel;
+let audioModel: any = null;
 
 async function loadModel() {
+  if (!tf) {
+    console.warn('TensorFlow not available - skipping voice analysis model load');
+    return;
+  }
+  
   try {
     const model = tf.sequential({
       layers: [
@@ -152,6 +157,44 @@ function calculateRhythmRegularity(segments: boolean[]): number {
 
 // Main analysis function
 export async function analyzeVoice(audioData: Float32Array, sampleRate: number): Promise<VoiceAnalysisResult> {
+  if (!tf || !audioModel) {
+    // Return basic rule-based analysis when TensorFlow not available
+    const features = extractFeatures(audioData);
+    const voiceSegments = await detectVoiceSegments(audioData);
+    const rhythmRegularity = calculateRhythmRegularity(voiceSegments);
+
+    const spamIndicators = [
+      rhythmRegularity > 0.8, // Too regular rhythm
+      features.energy < 0.2,  // Too low energy
+      features.zeroCrossings > 1000 // Too many zero crossings
+    ];
+
+    const spamProbability = spamIndicators.filter(Boolean).length / spamIndicators.length;
+
+    const featureDescriptions = [];
+    if (rhythmRegularity > 0.8) {
+      featureDescriptions.push('Unusually regular speech rhythm detected');
+    }
+    if (features.energy < 0.2) {
+      featureDescriptions.push('Abnormally low voice energy');
+    }
+    if (features.zeroCrossings > 1000) {
+      featureDescriptions.push('High frequency of voice pattern changes');
+    }
+
+    return {
+      isSpam: spamProbability > 0.6,
+      confidence: spamProbability,
+      features: featureDescriptions,
+      patterns: {
+        energy: features.energy,
+        zeroCrossings: features.zeroCrossings,
+        rhythmRegularity,
+        intonationVariance: features.spectralSlope
+      }
+    };
+  }
+
   if (!audioModel) {
     await loadModel();
   }
@@ -166,8 +209,8 @@ export async function analyzeVoice(audioData: Float32Array, sampleRate: number):
 
     // Prepare input for TensorFlow model
     const input = tf.tensor2d([features.mfcc]);
-    const prediction = audioModel.predict(input) as tf.Tensor;
-    const scores = Array.from(await prediction.data());
+    const prediction = audioModel.predict(input) as any;
+    const scores = Array.from(await prediction.data()) as number[];
 
     // Calculate spam probability
     const spamIndicators = [
@@ -212,5 +255,7 @@ export async function analyzeVoice(audioData: Float32Array, sampleRate: number):
   }
 }
 
-// Load the model when the service starts
-loadModel().catch(console.error);
+// Load the model when the service starts (only if TensorFlow is available)
+if (tf) {
+  loadModel().catch(console.error);
+}
