@@ -30,9 +30,13 @@ import { cn } from "@/lib/utils";
 interface Device {
   deviceId: string;
   name: string;
-  status: 'online' | 'offline';
-  ipAddress: string;
+  status: 'online' | 'offline' | 'configured' | 'disabled';
+  type?: string;
+  port?: string;
+  baudRate?: string;
+  ipAddress?: string;
   lastHeartbeat?: string;
+  callerIdEnabled?: boolean;
 }
 
 interface RiskScoreData {
@@ -189,18 +193,72 @@ export default function MasterInterface() {
                 <Statistics />
                 <Card>
                   <CardHeader>
-                    <CardTitle>Connected Devices</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      <Monitor className="h-5 w-5" />
+                      Connected Devices
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2">
-                      {devices.map((device) => (
-                        <div key={device.deviceId} className="flex items-center justify-between">
-                          <span>{device.name}</span>
-                          <span className={device.status === 'online' ? 'text-green-500' : 'text-red-500'}>
-                            {device.status}
-                          </span>
-                        </div>
-                      ))}
+                    <div className="space-y-3">
+                      {devices.length === 0 ? (
+                        <p className="text-sm text-gray-500">No devices detected</p>
+                      ) : (
+                        devices.map((device) => (
+                          <div 
+                            key={device.deviceId} 
+                            className="p-3 border rounded-lg dark:border-gray-700 space-y-2"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className={cn(
+                                    "h-2.5 w-2.5 rounded-full",
+                                    device.status === 'online' || device.status === 'configured' ? "bg-green-500" : 
+                                    device.status === 'disabled' ? "bg-gray-400" : "bg-red-500"
+                                  )}
+                                />
+                                <span className="font-medium">{device.type || 'Device'}</span>
+                              </div>
+                              <span className={cn(
+                                "text-xs px-2 py-1 rounded-full",
+                                device.status === 'online' || device.status === 'configured' ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" : 
+                                device.status === 'disabled' ? "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" :
+                                "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                              )}>
+                                {device.status}
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                              {device.port && (
+                                <div className="flex justify-between">
+                                  <span>Port:</span>
+                                  <span className="font-mono">{device.port}</span>
+                                </div>
+                              )}
+                              {device.baudRate && (
+                                <div className="flex justify-between">
+                                  <span>Baud Rate:</span>
+                                  <span className="font-mono">{device.baudRate}</span>
+                                </div>
+                              )}
+                              {device.callerIdEnabled !== undefined && (
+                                <div className="flex justify-between">
+                                  <span>Caller ID:</span>
+                                  <span className={device.callerIdEnabled ? "text-green-600" : "text-gray-500"}>
+                                    {device.callerIdEnabled ? 'Enabled' : 'Disabled'}
+                                  </span>
+                                </div>
+                              )}
+                              {device.ipAddress && (
+                                <div className="flex justify-between">
+                                  <span>IP Address:</span>
+                                  <span className="font-mono">{device.ipAddress}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </CardContent>
                 </Card>

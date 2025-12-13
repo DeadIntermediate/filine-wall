@@ -175,6 +175,43 @@ export function registerRoutes(app: Express): Server {
     res.json(settingsMap);
   });
 
+  // Get device/modem status
+  app.get("/api/admin/devices", async (req, res) => {
+    try {
+      // Get registered devices from database
+      const registeredDevices = await db.query.deviceRegistrations.findMany();
+      
+      // Get modem configuration from environment
+      const modemConfig = {
+        deviceId: 'local-modem',
+        name: process.env.MODEM_DEVICE || '/dev/ttyUSB0',
+        status: process.env.MODEM_ENABLED === 'true' ? 'configured' : 'disabled',
+        type: 'USRobotics Modem',
+        port: process.env.MODEM_PORT || process.env.MODEM_DEVICE || '/dev/ttyUSB0',
+        baudRate: process.env.MODEM_BAUDRATE || '57600',
+        callerIdEnabled: process.env.CALLER_ID_ENABLED !== 'false',
+        lastHeartbeat: new Date().toISOString()
+      };
+
+      // Combine registered devices and local modem
+      const allDevices = [
+        modemConfig,
+        ...registeredDevices.map(d => ({
+          deviceId: d.deviceId,
+          name: d.deviceName,
+          status: d.isActive ? 'online' : 'offline',
+          type: 'Remote Device',
+          ipAddress: d.ipAddress,
+          lastHeartbeat: d.lastHeartbeat?.toISOString()
+        }))
+      ];
+
+      res.json(allDevices);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch device status" });
+    }
+  });
+
   // User routes - Open access
   app.get("/api/user/calls", async (req, res) => {
     const logs = await db.query.callLogs.findMany({
