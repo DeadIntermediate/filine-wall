@@ -75,6 +75,42 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
+  // Auto-login for local deployments (when auth is disabled)
+  app.get("/api/auth/bypass", async (req, res) => {
+    if (process.env.REQUIRE_AUTH === 'true') {
+      return res.status(403).json({ message: "Authentication required" });
+    }
+    
+    // Create or get a default local admin user
+    try {
+      let localUser = await db.query.users.findFirst({
+        where: eq(users.username, 'local-admin')
+      });
+
+      if (!localUser) {
+        // Create default local admin
+        const [newUser] = await db.insert(users).values({
+          username: 'local-admin',
+          password: 'bypass', // Not used
+          role: 'admin'
+        }).returning();
+        localUser = newUser;
+      }
+
+      const token = AuthService.generateToken(localUser.id, localUser.role);
+      res.json({
+        token,
+        user: {
+          id: localUser.id,
+          username: localUser.username,
+          role: localUser.role
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create local user" });
+    }
+  });
+
   // Auth routes (public)
   app.post("/api/auth/login", async (req, res) => {
     try {

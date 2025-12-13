@@ -33,6 +33,36 @@ export const useAuthStore = create<AuthState>()(
 export function useAuth() {
   const { token, user, setAuth, logout } = useAuthStore();
 
+  // Check if auth is required
+  const { data: config } = useQuery({
+    queryKey: ["/api/config"],
+    queryFn: async () => {
+      const response = await fetch("/api/config");
+      return response.json();
+    },
+  });
+
+  // Auto-login for local deployments
+  const { isLoading: bypassLoading } = useQuery({
+    queryKey: ["/api/auth/bypass"],
+    queryFn: async () => {
+      if (token || config?.requireAuth === true) return null;
+      
+      try {
+        const response = await fetch("/api/auth/bypass");
+        if (response.ok) {
+          const data = await response.json();
+          setAuth(data.token, data.user);
+          return data;
+        }
+      } catch (error) {
+        // Bypass not available, auth required
+      }
+      return null;
+    },
+    enabled: !token && config?.requireAuth === false,
+  });
+
   const { isLoading } = useQuery({
     queryKey: ["/api/auth/validate"],
     queryFn: async () => {
@@ -63,6 +93,6 @@ export function useAuth() {
     token,
     setAuth,
     logout,
-    isLoading: isLoading && !!token,
+    isLoading: (isLoading && !!token) || bypassLoading,
   };
 }
