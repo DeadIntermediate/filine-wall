@@ -187,7 +187,7 @@ export class SpamDetectionService {
       batchSize: 32,
       validationSplit: 0.2,
       callbacks: {
-        onEpochEnd: (epoch, logs) => {
+        onEpochEnd: (epoch: number, logs: any) => {
           console.log(`Epoch ${epoch}: loss = ${logs?.loss}, accuracy = ${logs?.acc}`);
         }
       }
@@ -236,9 +236,9 @@ export class SpamDetectionService {
       voiceAnalysis?.confidence || 0
     ];
 
-    const prediction = tf.tidy(() => {
-      const inputTensor = tf.tensor2d([features]);
-      const result = this.model!.predict(inputTensor) as tf.Tensor;
+    const prediction = tf!.tidy(() => {
+      const inputTensor = tf!.tensor2d([features]);
+      const result = this.model!.predict(inputTensor) as any;
       return result.dataSync()[0];
     });
 
@@ -249,26 +249,31 @@ export class SpamDetectionService {
       Math.min(0.3 + (spamReportsCount.length * 0.2) + (features[5] * 0.3), 1) :
       prediction;
 
+    const resultFeatures: SpamPredictionResult['features'] = {
+      callPattern: {
+        frequency: features[4],
+        timeConsistency: features[1] - features[0]
+      },
+      metadata: {
+        spamReports: features[6],
+        blockRate: features[5],
+        predictionScore: prediction,
+        developmentMode: this.isDevelopmentMode,
+        rawFeatures: features
+      }
+    };
+
+    if (voiceAnalysis) {
+      resultFeatures.voicePattern = {
+        roboticScore: audioCharacteristics.energy || 0,
+        naturalness: 1 - (audioCharacteristics.rhythmRegularity || 0)
+      };
+    }
+
     const result: SpamPredictionResult = {
       isSpam: confidence > 0.7,
       confidence,
-      features: {
-        voicePattern: voiceAnalysis ? {
-          roboticScore: audioCharacteristics.energy || 0,
-          naturalness: 1 - (audioCharacteristics.rhythmRegularity || 0)
-        } : undefined,
-        callPattern: {
-          frequency: features[4],
-          timeConsistency: features[1] - features[0]
-        },
-        metadata: {
-          spamReports: features[6],
-          blockRate: features[5],
-          predictionScore: prediction,
-          developmentMode: this.isDevelopmentMode,
-          rawFeatures: features
-        }
-      }
+      features: resultFeatures
     };
 
     return result;
