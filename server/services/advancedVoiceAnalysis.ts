@@ -3,7 +3,16 @@
  * Real-time ML analysis of voice characteristics to detect robocalls and scammers
  */
 
-import * as tf from '@tensorflow/tfjs-node';
+// Conditional TensorFlow import - only load if ML features are enabled
+let tf: any = null;
+try {
+  if (process.env.ENABLE_VOICE_ANALYSIS === 'true' || process.env.FEATURE_VOICE_ANALYSIS === 'true') {
+    tf = require('@tensorflow/tfjs-node');
+  }
+} catch (error) {
+  console.warn('⚠ Voice analysis not available:', (error as Error).message);
+}
+
 import { AudioContext } from 'web-audio-api';
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';

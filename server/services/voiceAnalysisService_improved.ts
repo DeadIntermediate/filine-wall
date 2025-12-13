@@ -1,4 +1,13 @@
-import * as tf from '@tensorflow/tfjs-node';
+// Conditional TensorFlow import - only load if ML features are enabled
+let tf: any = null;
+try {
+  if (process.env.ENABLE_VOICE_ANALYSIS === 'true' || process.env.FEATURE_VOICE_ANALYSIS === 'true') {
+    tf = require('@tensorflow/tfjs-node');
+  }
+} catch (error) {
+  console.warn('⚠ Voice analysis not available:', (error as Error).message);
+}
+
 import * as webAudio from 'web-audio-api';
 import Meyda from 'meyda';
 import * as vad from 'node-vad';
