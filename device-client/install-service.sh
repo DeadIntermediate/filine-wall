@@ -21,10 +21,7 @@ INSTALL_DIR="/home/$ACTUAL_USER/filine-wall/device-client"
 
 echo "📦 Installing Python dependencies..."
 apt-get update -qq
-apt-get install -y python3-pip python3-serial python3-requests python3-cryptography > /dev/null 2>&1
-
-# Install Python packages
-pip3 install --quiet pyserial requests cryptography configparser
+apt-get install -y python3-serial python3-requests python3-cryptography > /dev/null 2>&1
 
 echo "✓ Dependencies installed"
 echo ""
