@@ -517,6 +517,24 @@ EOF
     log_progress "Copying .env.example to .env..."
     cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
     
+    # Detect 32-bit ARM and disable TensorFlow features
+    ARCH=$(dpkg --print-architecture 2>/dev/null || echo "unknown")
+    if [ "$ARCH" = "armhf" ]; then
+        log_warning "Detected 32-bit ARM (armhf) - TensorFlow.js is not compatible"
+        log_warning "Disabling ML-based features (voice analysis, NLP detection)"
+        
+        # Disable TensorFlow-dependent features in .env
+        if [[ "$OS" == "macos" ]]; then
+            sed -i '' "s|ENABLE_VOICE_ANALYSIS=true|ENABLE_VOICE_ANALYSIS=false|g" "$PROJECT_DIR/.env"
+            sed -i '' "s|ENABLE_NLP_DETECTION=true|ENABLE_NLP_DETECTION=false|g" "$PROJECT_DIR/.env"
+        else
+            sed -i "s|ENABLE_VOICE_ANALYSIS=true|ENABLE_VOICE_ANALYSIS=false|g" "$PROJECT_DIR/.env"
+            sed -i "s|ENABLE_NLP_DETECTION=true|ENABLE_NLP_DETECTION=false|g" "$PROJECT_DIR/.env"
+        fi
+        
+        log_info "ML features disabled (core call blocking still works!)"
+    fi
+    
     log_progress "Generating secure secrets..."
     JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
     ENCRYPTION_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
