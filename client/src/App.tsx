@@ -5,7 +5,6 @@ import { AlertCircle } from "lucide-react";
 import MasterInterface from "@/pages/MasterInterface";
 import DeviceInterface from "@/pages/DeviceInterface";
 import VerifyCaller from "@/pages/VerifyCaller";
-import { Layout } from "@/components/Layout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 function App() {
@@ -13,17 +12,15 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="system" storageKey="ui-theme">
-        <Layout>
-          <Switch>
-            {/* Main Interface - Always accessible */}
-            <Route path="/" component={MasterInterface} />
-            <Route path="/verify" component={VerifyCaller} />
-            <Route path="/device" component={DeviceInterface} />
+        <Switch>
+          {/* Main Interface - Always accessible */}
+          <Route path="/" component={MasterInterface} />
+          <Route path="/verify" component={VerifyCaller} />
+          <Route path="/device" component={DeviceInterface} />
 
-            {/* Fallback 404 */}
-            <Route component={NotFound} />
-          </Switch>
-        </Layout>
+          {/* Fallback 404 */}
+          <Route component={NotFound} />
+        </Switch>
       </ThemeProvider>
     </ErrorBoundary>
   );
