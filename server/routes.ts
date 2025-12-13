@@ -236,7 +236,7 @@ export function registerRoutes(app: Express): Server {
         .groupBy(sql`DATE(${callLogs.timestamp})`)
         .orderBy(sql`DATE(${callLogs.timestamp})`);
 
-      res.json({
+      return res.json({
         daily: stats,
         dateRange: {
           start: startDate.toISOString().split('T')[0],
@@ -245,7 +245,7 @@ export function registerRoutes(app: Express): Server {
       });
     } catch (error) {
       console.error('Error fetching daily statistics:', error);
-      res.status(500).json({
+      return res.status(500).json({
         message: "Error fetching daily statistics",
         error: error instanceof Error ? error.message : 'Unknown error'
       });
@@ -502,10 +502,10 @@ export function registerRoutes(app: Express): Server {
         ? encryption.encryptDeviceData(JSON.stringify(result))
         : JSON.stringify(result);
       
-      res.json({ data: responseData });
+      return res.json({ data: responseData });
     } catch (error) {
       console.error("Error screening call:", error);
-      res.status(500).json({ message: "Error screening call" });
+      return res.status(500).json({ message: "Error screening call" });
     }
   });
 
@@ -589,7 +589,7 @@ export function registerRoutes(app: Express): Server {
       ? encryption.encryptDeviceData(JSON.stringify(updated))
       : JSON.stringify(updated);
       
-    res.json({ data: responseData });
+    return res.json({ data: responseData });
   });
 
   // Get verification status (moved to /api/admin)
@@ -689,10 +689,10 @@ export function registerRoutes(app: Express): Server {
 
     try {
       const result = await verifyCode(phoneNumber, code);
-      res.json(result);
+      return res.json(result);
     } catch (error) {
       console.error("Error verifying caller:", error);
-      res.status(500).json({ message: "Error verifying caller" });
+      return res.status(500).json({ message: "Error verifying caller" });
     }
   });
 
@@ -761,10 +761,10 @@ export function registerRoutes(app: Express): Server {
         metadata: diagnosticResults,
       });
 
-      res.json(diagnosticResults);
+      return res.json(diagnosticResults);
     } catch (error) {
       console.error("Error running device diagnostic:", error);
-      res.status(500).json({ message: "Error running device diagnostic" });
+      return res.status(500).json({ message: "Error running device diagnostic" });
     }
   });
 
@@ -891,10 +891,10 @@ export function registerRoutes(app: Express): Server {
           });
       }
 
-      res.json(analysis);
+      return res.json(analysis);
     } catch (error) {
       console.error('Voice analysis error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         message: "Error analyzing voice",
         error: error instanceof Error ? error.message : 'Unknown error'
       });
