@@ -88,7 +88,9 @@ export class SpamDetectionService {
     }
   }
 
-  private static createSimplifiedModel(): tf.LayersModel {
+  private static createSimplifiedModel(): any {
+    if (!tf) throw new Error('TensorFlow not available');
+    
     const model = tf.sequential({
       layers: [
         tf.layers.dense({ units: 16, activation: 'relu', inputShape: [8] }),
@@ -285,7 +287,7 @@ export class SpamDetectionService {
       metadata.voiceEnergy || 0
     ];
   }
-}
+
   /**
    * Rule-based spam prediction fallback when TensorFlow is not available
    */
