@@ -1,7 +1,7 @@
 import * as tf from '@tensorflow/tfjs-node';
 import * as webAudio from 'web-audio-api';
 import Meyda from 'meyda';
-import * as vad from 'node-vad';
+import vad from 'node-vad';
 import { db } from "@db";
 import { voicePatterns } from "@db/schema";
 
