@@ -101,15 +101,15 @@ function extractFeatures(audioData: Float32Array): VoiceFeatures {
 }
 
 // Detect voice activity segments
-function detectVoiceSegments(audioData: Float32Array): boolean[] {
+async function detectVoiceSegments(audioData: Float32Array): Promise<boolean[]> {
   const vadInstance = new vad(vad.Mode.NORMAL);
   const frameSize = 480; // 30ms at 16kHz
   const segments: boolean[] = [];
 
   for (let i = 0; i < audioData.length; i += frameSize) {
     const frame = audioData.slice(i, i + frameSize);
-    const result = vadInstance.process(frame);
-    segments.push(result === vad.Event.VOICE);
+    const result = await vadInstance.processAudio(Buffer.from(frame.buffer), 16000);
+    segments.push(result.voice); // voice property indicates voice detected
   }
 
   return segments;
@@ -150,7 +150,7 @@ export async function analyzeVoice(audioData: Float32Array, sampleRate: number):
   try {
     // Extract features
     const features = extractFeatures(audioData);
-    const voiceSegments = detectVoiceSegments(audioData);
+    const voiceSegments = await detectVoiceSegments(audioData);
 
     // Calculate rhythm regularity
     const rhythmRegularity = calculateRhythmRegularity(voiceSegments);

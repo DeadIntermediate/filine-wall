@@ -7,6 +7,7 @@ declare module 'node-vad' {
   }
 
   export class VAD {
+    static Mode: any;
     constructor(mode: Mode);
     processAudio(buffer: Buffer | Float32Array, sampleRate: number): Promise<{ voice: boolean }>;
   }
