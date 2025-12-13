@@ -1,7 +1,5 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { authenticate, requireAdmin } from "./middleware/auth";
-import { AuthService } from "./services/authService";
 import { db } from "@db";
 import { desc, eq, sql } from "drizzle-orm";
 import { users, phoneNumbers, callLogs, spamReports, voicePatterns, featureSettings, deviceConfigurations, deviceRegistrations } from "@db/schema";
@@ -67,10 +65,10 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Config endpoint - tells frontend if auth is required
+  // Config endpoint - tells frontend auth is disabled
   app.get("/api/config", (req, res) => {
     res.json({
-      requireAuth: process.env.REQUIRE_AUTH === 'true',
+      requireAuth: false,
       environment: process.env.NODE_ENV || 'development'
     });
   });
@@ -132,18 +130,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Optional authentication for local/home use
-  // If REQUIRE_AUTH=true in .env, enforce authentication
-  // Otherwise, allow public access for single-user home deployments
-  const requireAuth = process.env.REQUIRE_AUTH === 'true';
-  
-  if (requireAuth) {
-    // Protected routes - Master Interface (admin only)
-    app.use("/api/admin/*", authenticate, requireAdmin);
-    console.log("🔒 Authentication enabled for admin routes");
-  } else {
-    console.log("🔓 Running in open access mode (local deployment)");
-  }
+  // No authentication required - local deployment mode
+  console.log("🔓 Running in open access mode (local deployment)");
 
   // Move existing admin routes under /api/admin
   app.get("/api/admin/stats", async (req, res) => {
@@ -187,12 +175,7 @@ export function registerRoutes(app: Express): Server {
     res.json(settingsMap);
   });
 
-
-  // Protected routes - User Interface (authenticated users only if REQUIRE_AUTH is enabled)
-  if (requireAuth) {
-    app.use("/api/user/*", authenticate);
-  }
-
+  // User routes - Open access
   app.get("/api/user/calls", async (req, res) => {
     const logs = await db.query.callLogs.findMany({
       orderBy: desc(callLogs.timestamp),
