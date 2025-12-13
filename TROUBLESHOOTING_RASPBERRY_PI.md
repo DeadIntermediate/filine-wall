@@ -195,18 +195,40 @@ ENABLE_NLP_DETECTION=false
 
 ---
 
-### Issue 5: npm install fails
+### Issue 5: npm install fails - React dependency conflict
+
+**Symptoms:**
+- "ERESOLVE could not resolve"
+- "Conflicting peer dependency: react@16.14.0"
+- "peer react@'^16.8.0' from react-simple-maps"
+
+**Cause:** `react-simple-maps` has outdated peer dependency metadata
+
+**Solution:**
+```bash
+# Clear cache and reinstall with legacy peer deps
+rm -rf node_modules package-lock.json
+npm cache clean --force
+npm install --legacy-peer-deps
+```
+
+**Permanent Fix (already included in repo):**
+The `.npmrc` file now includes `legacy-peer-deps=true` so regular `npm install` works.
+
+---
+
+### Issue 6: Other npm install failures
 
 **Symptoms:**
 - "Cannot find module"
-- "peer dependency" errors
+- Generic installation errors
 
 **Solution:**
 ```bash
 # Clear cache and reinstall
 rm -rf node_modules package-lock.json
 npm cache clean --force
-npm install
+npm install --legacy-peer-deps
 ```
 
 ---
