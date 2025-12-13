@@ -1,4 +1,17 @@
-import * as tf from '@tensorflow/tfjs-node';
+// Conditional TensorFlow import for 32-bit ARM compatibility
+let tf: any = null;
+try {
+  if (process.env.ENABLE_NLP_DETECTION === 'true') {
+    tf = require('@tensorflow/tfjs-node');
+  }
+} catch (error: any) {
+  if (error.code === 'ERR_DLOPEN_FAILED') {
+    console.warn('⚠ TensorFlow not available: Not compatible with this system architecture (likely 32-bit ARM)');
+  } else {
+    console.error('Failed to load TensorFlow:', error.message);
+  }
+}
+
 import { db } from "@db";
 import { voicePatterns, callLogs, spamReports } from "@db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -20,12 +33,18 @@ interface SpamPredictionResult {
 }
 
 export class SpamDetectionService {
-  private static model: tf.LayersModel | null = null;
+  private static model: any | null = null;
   private static isModelLoading = false;
   private static isDevelopmentMode = process.env.NODE_ENV === 'development';
   private static modelInitPromise: Promise<void> | null = null;
 
   static async ensureModelInitialized() {
+    // Return early if TensorFlow not available
+    if (!tf) {
+      console.warn('TensorFlow not available - spam detection features disabled');
+      return;
+    }
+    
     if (!this.modelInitPromise) {
       this.modelInitPromise = this.loadModel();
     }
@@ -33,7 +52,7 @@ export class SpamDetectionService {
   }
 
   private static async loadModel() {
-    if (this.model || this.isModelLoading) return;
+    if (!tf || this.model || this.isModelLoading) return;
 
     try {
       this.isModelLoading = true;
@@ -182,7 +201,12 @@ export class SpamDetectionService {
 
   static async predictSpam(phoneNumber: string, callData: any): Promise<SpamPredictionResult> {
     await this.ensureModelInitialized();
-    if (!this.model) throw new Error('Model not initialized');
+    
+    // Fallback to rule-based detection if TensorFlow not available
+    if (!tf || !this.model) {
+      console.log('Using rule-based spam detection (TensorFlow not available)');
+      return this.ruleBasedPrediction(phoneNumber, callData);
+    }
 
     const [recentCalls, spamReportsCount, voiceAnalysis] = await Promise.all([
       db.query.callLogs.findMany({
@@ -260,5 +284,70 @@ export class SpamDetectionService {
       metadata.spamReports || 0,
       metadata.voiceEnergy || 0
     ];
+  }
+}
+  /**
+   * Rule-based spam prediction fallback when TensorFlow is not available
+   */
+  private static async ruleBasedPrediction(phoneNumber: string, callData: any): Promise<SpamPredictionResult> {
+    const [recentCalls, spamReportsCount] = await Promise.all([
+      db.query.callLogs.findMany({
+        where: eq(callLogs.phoneNumber, phoneNumber),
+        orderBy: desc(callLogs.timestamp),
+        limit: 10
+      }),
+      db.query.spamReports.findMany({
+        where: eq(spamReports.phoneNumber, phoneNumber)
+      })
+    ]);
+
+    let score = 0;
+    const weights = {
+      spamReports: 0.4,
+      blockRate: 0.3,
+      callFrequency: 0.2,
+      oddHours: 0.1
+    };
+
+    // Check spam reports
+    if (spamReportsCount.length > 0) {
+      score += weights.spamReports * Math.min(spamReportsCount.length / 5, 1);
+    }
+
+    // Check block rate
+    if (recentCalls.length > 0) {
+      const blockRate = recentCalls.filter((c: any) => c.action === 'blocked').length / recentCalls.length;
+      score += weights.blockRate * blockRate;
+    }
+
+    // Check call frequency (multiple calls in short period)
+    if (recentCalls.length >= 3) {
+      score += weights.callFrequency;
+    }
+
+    // Check odd hours (late night/early morning)
+    const hour = callData.timeOfDay || new Date().getHours();
+    if (hour < 7 || hour > 21) {
+      score += weights.oddHours;
+    }
+
+    return {
+      isSpam: score > 0.7,
+      confidence: score,
+      features: {
+        callPattern: {
+          frequency: recentCalls.length,
+          timeConsistency: hour
+        },
+        metadata: {
+          spamReports: spamReportsCount.length,
+          blockRate: recentCalls.length > 0 ? 
+            recentCalls.filter((c: any) => c.action === 'blocked').length / recentCalls.length : 0,
+          predictionScore: score,
+          method: 'rule-based-fallback',
+          reason: 'TensorFlow not available on this system'
+        }
+      }
+    };
   }
 }

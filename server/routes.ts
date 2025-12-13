@@ -13,7 +13,7 @@ import { SpamDatabaseService } from "./services/spamDatabaseService";
 import { getEncryptionService } from "./services/encryptionService";
 
 // Voice analysis import - conditionally loaded to avoid TensorFlow errors on unsupported platforms
-let analyzeVoice: ((audioData: Buffer) => Promise<any>) | null = null;
+let analyzeVoice: ((audioData: Float32Array, sampleRate: number) => Promise<any>) | null = null;
 try {
   if (process.env.ENABLE_VOICE_ANALYSIS === 'true') {
     const voiceModule = require("./services/voiceAnalysisService");
@@ -74,7 +74,7 @@ export function registerRoutes(app: Express): Server {
       const result = await AuthService.login(username, password);
       res.json(result);
     } catch (error) {
-      res.status(401).json({ message: error.message });
+      res.status(401).json({ message: error instanceof Error ? error.message : "Authentication failed" });
     }
   });
 
@@ -84,7 +84,7 @@ export function registerRoutes(app: Express): Server {
       const user = await AuthService.createUser(username, password, role);
       res.json({ ...user, password: undefined });
     } catch (error) {
-      res.status(400).json({ message: error.message });
+      res.status(400).json({ message: error instanceof Error ? error.message : "Registration failed" });
     }
   });
 
@@ -122,9 +122,9 @@ export function registerRoutes(app: Express): Server {
       .where(sql`${callLogs.timestamp} >= ${today}`);
 
     res.json({
-      totalBlocked: totalBlocked.count,
-      blacklistedCount: blacklistedCount.count,
-      todayBlocks: todayBlocks.count,
+      totalBlocked: totalBlocked?.count ?? 0,
+      blacklistedCount: blacklistedCount?.count ?? 0,
+      todayBlocks: todayBlocks?.count ?? 0,
     });
   });
 
@@ -410,7 +410,7 @@ export function registerRoutes(app: Express): Server {
       .returning();
 
     // If report is verified, automatically add to blacklist
-    if (updated.status === "verified") {
+    if (updated && updated.status === "verified") {
       await db
         .insert(phoneNumbers)
         .values({
@@ -476,7 +476,9 @@ export function registerRoutes(app: Express): Server {
     let phoneNumber: string;
     
     try {
-      const decryptedData = device.encryptionEnabled 
+      const deviceSettings = device.settings as { encryptionEnabled?: boolean } | null;
+      const encryptionEnabled = deviceSettings?.encryptionEnabled ?? false;
+      const decryptedData = encryptionEnabled 
         ? encryption.decryptDeviceData(encryptedData)
         : encryptedData;
       const parsedData = JSON.parse(decryptedData);
@@ -491,10 +493,12 @@ export function registerRoutes(app: Express): Server {
 
     try {
       const result = await screenCall(phoneNumber);
-      await logCall(phoneNumber, { ...result, deviceId });
+      await logCall(phoneNumber, result, deviceId);
 
       // Encrypt response if device encryption is enabled
-      const responseData = device.encryptionEnabled
+      const deviceSettings = device.settings as { encryptionEnabled?: boolean } | null;
+      const encryptionEnabled = deviceSettings?.encryptionEnabled ?? false;
+      const responseData = encryptionEnabled
         ? encryption.encryptDeviceData(JSON.stringify(result))
         : JSON.stringify(result);
       
@@ -558,7 +562,9 @@ export function registerRoutes(app: Express): Server {
     let heartbeatData: any;
     
     try {
-      const decryptedData = device.encryptionEnabled
+      const deviceSettings = device.settings as { encryptionEnabled?: boolean } | null;
+      const encryptionEnabled = deviceSettings?.encryptionEnabled ?? false;
+      const decryptedData = encryptionEnabled
         ? encryption.decryptDeviceData(encryptedData)
         : encryptedData;
       heartbeatData = JSON.parse(decryptedData);
@@ -577,7 +583,9 @@ export function registerRoutes(app: Express): Server {
       .returning();
 
     // Encrypt response if device encryption is enabled
-    const responseData = device.encryptionEnabled
+    const deviceSettings = device.settings as { encryptionEnabled?: boolean } | null;
+    const encryptionEnabled = deviceSettings?.encryptionEnabled ?? false;
+    const responseData = encryptionEnabled
       ? encryption.encryptDeviceData(JSON.stringify(updated))
       : JSON.stringify(updated);
       
@@ -601,7 +609,7 @@ export function registerRoutes(app: Express): Server {
 
   // Get real-time risk score (moved to /api/admin)
   app.get("/api/admin/risk-score", async (req, res) => {
-    const [recentCalls] = await db
+    const recentCallsResult = await db
       .select({
         total: sql<number>`count(*)`,
         blocked: sql<number>`count(*) filter (where ${callLogs.action} = 'blocked')`
@@ -609,20 +617,24 @@ export function registerRoutes(app: Express): Server {
       .from(callLogs)
       .where(sql`${callLogs.timestamp} >= NOW() - INTERVAL '5 minutes'`);
 
+    const recentCalls = recentCallsResult[0] || { total: 0, blocked: 0 };
+
     // Calculate current risk based on recent call patterns
     const blockRate = recentCalls.total > 0 ? (recentCalls.blocked / recentCalls.total) * 100 : 0;
 
     // Get latest high-risk numbers
-    const highRiskNumbers = await db
+    const highRiskNumbersResult = await db
       .select({
         count: sql<number>`count(*)`
       })
       .from(phoneNumbers)
       .where(sql`${phoneNumbers.reputationScore} < 30`);
 
+    const highRiskNumbers = highRiskNumbersResult[0] || { count: 0 };
+
     // Combine factors for overall risk score
     const baseRisk = blockRate * 0.6; // 60% weight on recent block rate
-    const reputationImpact = (highRiskNumbers[0].count > 0 ? 20 : 0); // Impact of known high-risk numbers
+    const reputationImpact = (highRiskNumbers.count > 0 ? 20 : 0); // Impact of known high-risk numbers
 
     const currentRisk = Math.min(100, Math.round(baseRisk + reputationImpact));
 
@@ -630,7 +642,7 @@ export function registerRoutes(app: Express): Server {
       currentRisk,
       factors: {
         recentBlockRate: Math.round(blockRate),
-        highRiskNumbers: highRiskNumbers[0].count,
+        highRiskNumbers: highRiskNumbers.count,
       }
     });
   });
@@ -745,6 +757,7 @@ export function registerRoutes(app: Express): Server {
       await db.insert(callLogs).values({
         phoneNumber: deviceId,
         action: "diagnostic",
+        callerId: null,
         metadata: diagnosticResults,
       });
 
@@ -812,7 +825,7 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("GitHub API Error:", error);
       res.status(500).json({
-        message: error.message || "Failed to set up repository",
+        message: error instanceof Error ? error.message : "Failed to set up repository",
       });
     }
   });
@@ -891,7 +904,7 @@ export function registerRoutes(app: Express): Server {
   // Get Voice Analysis Statistics
   app.get("/api/voice/stats", async (req, res) => {
     try {
-      const [stats] = await db
+      const statsResult = await db
         .select({
           total: sql<number>`count(*)`,
           spam: sql<number>`count(*) filter (where pattern_type = 'spam')`,
@@ -900,6 +913,8 @@ export function registerRoutes(app: Express): Server {
         })
         .from(voicePatterns)
         .where(sql`created_at >= NOW() - INTERVAL '7 days'`);
+
+      const stats = statsResult[0] || { total: 0, spam: 0, legitimate: 0, avgConfidence: 0 };
 
       // Get patterns with high confidence
       const commonPatterns = await db
