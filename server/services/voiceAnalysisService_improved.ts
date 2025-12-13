@@ -166,7 +166,7 @@ class VoiceModelManager {
         validationSplit: 0.2,
         shuffle: true,
         callbacks: {
-          onEpochEnd: (epoch, logs) => {
+          onEpochEnd: (epoch: number, logs: any) => {
             console.log(`Voice model epoch ${epoch}: loss=${logs?.loss.toFixed(4)}, accuracy=${logs?.acc?.toFixed(4)}`);
           }
         }
@@ -190,7 +190,7 @@ class VoiceModelManager {
     
     return tf.tidy(() => {
       const inputTensor = tf.tensor2d([mfccFeatures.slice(0, 13)]);
-      const prediction = model.predict(inputTensor) as tf.Tensor;
+      const prediction = model.predict(inputTensor) as any;
       return prediction.dataSync()[0];
     });
   }
@@ -254,24 +254,18 @@ function extractFeatures(audioData: Float32Array, sampleRate: number): VoiceFeat
 // Detect voice activity segments
 function detectVoiceSegments(audioData: Float32Array, sampleRate: number): boolean[] {
   try {
-    const vadInstance = new vad(vad.Mode.NORMAL);
+    // Simple energy-based VAD since node-vad has interface issues
     const frameDuration = 30; // 30ms frames
     const frameSize = Math.floor((sampleRate * frameDuration) / 1000);
     const segments: boolean[] = [];
+    const energyThreshold = 0.01; // Tune based on your audio
 
     for (let i = 0; i < audioData.length; i += frameSize) {
       const frame = audioData.slice(i, Math.min(i + frameSize, audioData.length));
       
-      // VAD requires specific frame sizes, pad if necessary
-      if (frame.length < frameSize) {
-        const padded = new Float32Array(frameSize);
-        padded.set(frame);
-        const result = vadInstance.process(padded);
-        segments.push(result === vad.Event.VOICE);
-      } else {
-        const result = vadInstance.process(frame);
-        segments.push(result === vad.Event.VOICE);
-      }
+      // Calculate frame energy
+      const energy = frame.reduce((sum, val) => sum + val * val, 0) / frame.length;
+      segments.push(energy > energyThreshold);
     }
 
     return segments;
@@ -330,7 +324,9 @@ function calculateNaturalness(features: VoiceFeatures, rhythmRegularity: number)
 
   // Abnormal zero crossings
   const normalZCRange = [50, 500];
-  if (features.zeroCrossings < normalZCRange[0] || features.zeroCrossings > normalZCRange[1]) {
+  if (features.zeroCrossings !== undefined && 
+      (features.zeroCrossings < (normalZCRange[0] || 0) || 
+       features.zeroCrossings > (normalZCRange[1] || 500))) {
     naturalness -= 0.15;
   }
 
@@ -410,6 +406,7 @@ export async function saveVoicePattern(
 ): Promise<void> {
   try {
     await db.insert(voicePatterns).values({
+      patternType: isSpam ? 'spam' : 'legitimate',
       confidence: confidence.toString(),
       features: {
         mfcc: features.mfcc,

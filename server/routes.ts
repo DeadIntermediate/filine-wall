@@ -73,60 +73,30 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Auto-login for local deployments (when auth is disabled)
-  app.get("/api/auth/bypass", async (req, res) => {
-    if (process.env.REQUIRE_AUTH === 'true') {
-      return res.status(403).json({ message: "Authentication required" });
-    }
-    
-    // Create or get a default local admin user
-    try {
-      let localUser = await db.query.users.findFirst({
-        where: eq(users.username, 'local-admin')
-      });
-
-      if (!localUser) {
-        // Create default local admin
-        const [newUser] = await db.insert(users).values({
-          username: 'local-admin',
-          password: 'bypass', // Not used
-          role: 'admin'
-        }).returning();
-        localUser = newUser;
-      }
-
-      const token = AuthService.generateToken(localUser.id, localUser.role);
-      res.json({
-        token,
-        user: {
-          id: localUser.id,
-          username: localUser.username,
-          role: localUser.role
-        }
-      });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to create local user" });
-    }
-  });
-
-  // Auth routes (public)
+  // Auth routes (public) - Disabled in local mode
   app.post("/api/auth/login", async (req, res) => {
     try {
+      if (process.env.REQUIRE_AUTH !== 'true') {
+        return res.status(403).json({ message: "Authentication disabled in local mode" });
+      }
       const { username, password } = req.body;
-      const result = await AuthService.login(username, password);
-      res.json(result);
+      // AuthService removed - return error
+      return res.status(501).json({ message: "Authentication not implemented in this build" });
     } catch (error) {
-      res.status(401).json({ message: error instanceof Error ? error.message : "Authentication failed" });
+      return res.status(401).json({ message: error instanceof Error ? error.message : "Authentication failed" });
     }
   });
 
   app.post("/api/auth/register", async (req, res) => {
     try {
+      if (process.env.REQUIRE_AUTH !== 'true') {
+        return res.status(403).json({ message: "Authentication disabled in local mode" });
+      }
       const { username, password, role } = req.body;
-      const user = await AuthService.createUser(username, password, role);
-      res.json({ ...user, password: undefined });
+      // AuthService removed - return error
+      return res.status(501).json({ message: "Authentication not implemented in this build" });
     } catch (error) {
-      res.status(400).json({ message: error instanceof Error ? error.message : "Registration failed" });
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Registration failed" });
     }
   });
 
@@ -198,11 +168,11 @@ export function registerRoutes(app: Express): Server {
         modemConfig,
         ...registeredDevices.map(d => ({
           deviceId: d.deviceId,
-          name: d.deviceName,
-          status: d.isActive ? 'online' : 'offline',
-          type: 'Remote Device',
-          ipAddress: d.ipAddress,
-          lastHeartbeat: d.lastHeartbeat?.toISOString()
+          name: d.name || d.deviceId,
+          status: d.status || 'offline',
+          type: d.deviceType || 'Remote Device',
+          ipAddress: (d.metadata as any)?.ipAddress || 'N/A',
+          lastHeartbeat: d.lastActive?.toISOString()
         }))
       ];
 

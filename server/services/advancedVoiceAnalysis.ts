@@ -49,7 +49,7 @@ interface VoiceAnalysisResult {
 }
 
 export class AdvancedVoiceAnalyzer extends EventEmitter {
-    private model: tf.LayersModel | null = null;
+    private model: any = null;
     private audioContext: AudioContext;
     private isInitialized = false;
     private featureBuffer: Float32Array[] = [];
@@ -149,7 +149,7 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
             const featureTensor = tf.tensor2d([this.flattenFeatures(features)]);
             
             // Run inference
-            const prediction = this.model.predict(featureTensor) as tf.Tensor;
+            const prediction = this.model.predict(featureTensor) as any;
             const probabilities = await prediction.data();
             
             // Interpret results
@@ -496,7 +496,7 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
             const xs = tf.tensor2d(bufferAsArray);
             
             // Generate pseudo-labels based on current model predictions
-            const predictions = this.model.predict(xs) as tf.Tensor;
+            const predictions = this.model.predict(xs) as any;
             
             // Semi-supervised learning update
             await this.model.fit(xs, predictions, {
