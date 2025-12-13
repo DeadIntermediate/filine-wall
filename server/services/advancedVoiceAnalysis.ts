@@ -69,7 +69,7 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
             this.isInitialized = true;
             this.emit('ready');
         } catch (error) {
-            logger.error('Failed to initialize voice analysis model:', error);
+            logger.error('Failed to initialize voice analysis model:', error instanceof Error ? error : undefined);
             throw error;
         }
     }
@@ -144,7 +144,7 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
             const probabilities = await prediction.data();
             
             // Interpret results
-            const result = this.interpretPrediction(probabilities, features);
+            const result = this.interpretPrediction(probabilities as Float32Array, features);
             
             // Cleanup tensors
             featureTensor.dispose();
@@ -156,7 +156,7 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
             return result;
             
         } catch (error) {
-            logger.error('Voice analysis failed:', error);
+            logger.error('Voice analysis failed:', error instanceof Error ? error : undefined);
             throw error;
         }
     }
@@ -211,7 +211,7 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
             return features;
             
         } catch (error) {
-            logger.error('Feature extraction failed:', error);
+            logger.error('Feature extraction failed:', error instanceof Error ? error : undefined);
             return features; // Return partial features
         }
     }
@@ -291,9 +291,15 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
         
         // Look for compression-related frequency anomalies
         for (let i = 1; i < spectrum.length - 1; i++) {
-            const currentMag = Math.abs(spectrum[i]);
-            const prevMag = Math.abs(spectrum[i - 1]);
-            const nextMag = Math.abs(spectrum[i + 1]);
+            const current = spectrum[i];
+            const prev = spectrum[i - 1];
+            const next = spectrum[i + 1];
+            
+            if (!current || !prev || !next) continue;
+            
+            const currentMag = Math.sqrt(current.real ** 2 + current.imag ** 2);
+            const prevMag = Math.sqrt(prev.real ** 2 + prev.imag ** 2);
+            const nextMag = Math.sqrt(next.real ** 2 + next.imag ** 2);
             
             // Detect sudden drops/spikes typical of compression
             if (currentMag > prevMag * 2 && currentMag > nextMag * 2) {
@@ -334,7 +340,11 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
         
         let jitterSum = 0;
         for (let i = 1; i < periods.length; i++) {
-            jitterSum += Math.abs(periods[i] - periods[i - 1]);
+            const current = periods[i];
+            const prev = periods[i - 1];
+            if (current !== undefined && prev !== undefined) {
+                jitterSum += Math.abs(current - prev);
+            }
         }
         
         const meanPeriod = periods.reduce((sum, p) => sum + p, 0) / periods.length;
@@ -350,7 +360,11 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
         
         let shimmerSum = 0;
         for (let i = 1; i < amplitudes.length; i++) {
-            shimmerSum += Math.abs(amplitudes[i] - amplitudes[i - 1]);
+            const current = amplitudes[i];
+            const prev = amplitudes[i - 1];
+            if (current !== undefined && prev !== undefined) {
+                shimmerSum += Math.abs(current - prev);
+            }
         }
         
         const meanAmplitude = amplitudes.reduce((sum, a) => sum + a, 0) / amplitudes.length;
@@ -402,7 +416,7 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
      * Interpret ML model prediction results
      */
     private interpretPrediction(probabilities: Float32Array, features: VoiceFeatures): VoiceAnalysisResult {
-        const [humanProb, robocallProb, scammerProb] = Array.from(probabilities);
+        const [humanProb = 0, robocallProb = 0, scammerProb = 0] = Array.from(probabilities);
         
         const isRobocall = robocallProb > 0.5 || scammerProb > 0.3;
         const confidence = Math.max(humanProb, robocallProb, scammerProb);
@@ -452,7 +466,7 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
      */
     private async updateModelWithFeedback(features: VoiceFeatures, result: VoiceAnalysisResult): Promise<void> {
         // Store for batch learning updates
-        this.featureBuffer.push(this.flattenFeatures(features));
+        this.featureBuffer.push(new Float32Array(this.flattenFeatures(features)));
         
         // Periodic model updates with accumulated feedback
         if (this.featureBuffer.length >= 100) {
@@ -468,8 +482,9 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
         if (!this.model || this.featureBuffer.length === 0) return;
         
         try {
-            // Convert buffer to tensors
-            const xs = tf.tensor2d(this.featureBuffer);
+            // Convert buffer to tensors - use Array.from to convert Float32Array[] to number[][]
+            const bufferAsArray = this.featureBuffer.map(arr => Array.from(arr));
+            const xs = tf.tensor2d(bufferAsArray);
             
             // Generate pseudo-labels based on current model predictions
             const predictions = this.model.predict(xs) as tf.Tensor;
@@ -487,7 +502,7 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
             logger.info('Performed batch learning update with voice analysis model');
             
         } catch (error) {
-            logger.error('Batch learning failed:', error);
+            logger.error('Batch learning failed:', error instanceof Error ? error : undefined);
         }
     }
 
@@ -497,7 +512,10 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
         const float32Array = new Float32Array(int16Array.length);
         
         for (let i = 0; i < int16Array.length; i++) {
-            float32Array[i] = int16Array[i] / 32768.0;
+            const value = int16Array[i];
+            if (value !== undefined) {
+                float32Array[i] = value / 32768.0;
+            }
         }
         
         return float32Array;
@@ -513,9 +531,12 @@ export class AdvancedVoiceAnalyzer extends EventEmitter {
             let imag = 0;
             
             for (let n = 0; n < N; n++) {
-                const angle = -2 * Math.PI * k * n / N;
-                real += audio[n] * Math.cos(angle);
-                imag += audio[n] * Math.sin(angle);
+                const audioValue = audio[n];
+                if (audioValue !== undefined) {
+                    const angle = -2 * Math.PI * k * n / N;
+                    real += audioValue * Math.cos(angle);
+                    imag += audioValue * Math.sin(angle);
+                }
             }
             
             result.push({ real, imag });
