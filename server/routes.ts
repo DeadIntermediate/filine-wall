@@ -10,8 +10,28 @@ import { calculateReputationScore } from "./services/reputationScoring";
 import { verifyCode, getVerificationAttempts } from "./services/callerVerification";
 import { randomBytes, createHash } from "crypto";
 import { SpamDatabaseService } from "./services/spamDatabaseService";
-import { analyzeVoice, type VoiceAnalysisResult } from "./services/voiceAnalysisService";
 import { getEncryptionService } from "./services/encryptionService";
+
+// Voice analysis import - conditionally loaded to avoid TensorFlow errors on unsupported platforms
+let analyzeVoice: ((audioData: Buffer) => Promise<any>) | null = null;
+try {
+  if (process.env.ENABLE_VOICE_ANALYSIS === 'true') {
+    const voiceModule = require("./services/voiceAnalysisService");
+    analyzeVoice = voiceModule.analyzeVoice;
+  }
+} catch (error: any) {
+  if (error.code === 'ERR_DLOPEN_FAILED') {
+    console.warn('⚠ Voice analysis disabled: TensorFlow not compatible with this system architecture');
+  } else {
+    console.warn('⚠ Voice analysis not available:', error.message);
+  }
+}
+
+export type VoiceAnalysisResult = {
+  isRobocall: boolean;
+  confidence: number;
+  reason: string;
+};
 
 export function registerRoutes(app: Express): Server {
   // Health check endpoint
@@ -821,6 +841,14 @@ export function registerRoutes(app: Express): Server {
   // Voice Analysis Endpoint
   app.post("/api/voice/analyze", async (req, res) => {
     try {
+      // Check if voice analysis is available
+      if (!analyzeVoice) {
+        return res.status(503).json({
+          message: "Voice analysis is not available on this system",
+          reason: "TensorFlow.js not compatible with system architecture (likely 32-bit ARM)"
+        });
+      }
+
       const { audioData, sampleRate } = req.body;
 
       if (!audioData || !sampleRate) {
