@@ -67,6 +67,14 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Config endpoint - tells frontend if auth is required
+  app.get("/api/config", (req, res) => {
+    res.json({
+      requireAuth: process.env.REQUIRE_AUTH === 'true',
+      environment: process.env.NODE_ENV || 'development'
+    });
+  });
+
   // Auth routes (public)
   app.post("/api/auth/login", async (req, res) => {
     try {

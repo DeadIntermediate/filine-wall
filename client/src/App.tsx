@@ -9,18 +9,33 @@ import DeviceInterface from "@/pages/DeviceInterface";
 import VerifyCaller from "@/pages/VerifyCaller";
 import { Layout } from "@/components/Layout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useQuery } from "@tanstack/react-query";
 
 function App() {
   const { user, isLoading } = useAuth();
   const [location] = useLocation();
 
-  // If loading auth state, show loading
-  if (isLoading) {
+  // Check if authentication is required
+  const { data: config, isLoading: configLoading } = useQuery({
+    queryKey: ["/api/config"],
+    queryFn: async () => {
+      const response = await fetch("/api/config");
+      return response.json();
+    },
+  });
+
+  // If loading auth state or config, show loading
+  if (isLoading || configLoading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
 
-  // If no user and not on login page, redirect to login
-  if (!user && !location.startsWith("/auth")) {
+  const requireAuth = config?.requireAuth ?? true; // Default to requiring auth
+
+  // If auth is not required, create a mock admin user for local mode
+  const effectiveUser = requireAuth ? user : (user || { id: 1, username: 'local', role: 'admin' });
+
+  // If auth required and no user and not on login page, redirect to login
+  if (requireAuth && !user && !location.startsWith("/auth")) {
     window.location.href = "/auth/login";
     return null;
   }
@@ -37,7 +52,7 @@ function App() {
             <Layout>
               <Switch>
                 {/* Master Interface (Admin) */}
-                {user?.role === 'admin' && (
+                {effectiveUser?.role === 'admin' && (
                   <Switch>
                     <Route path="/" component={MasterInterface} />
                     <Route path="/verify" component={VerifyCaller} />
@@ -45,7 +60,7 @@ function App() {
                 )}
 
                 {/* Device Interface (Regular Users) */}
-                {user?.role === 'user' && (
+                {effectiveUser?.role === 'user' && (
                   <Switch>
                     <Route path="/" component={DeviceInterface} />
                     <Route path="/verify" component={VerifyCaller} />
