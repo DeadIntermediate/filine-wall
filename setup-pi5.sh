@@ -53,20 +53,31 @@ echo "    - Collaborative Threat Intelligence"
 echo "    - Real-time Transcription"
 echo "    - Behavioral Analysis"
 echo "  • Environment: Production"
+echo "  • Database: Remote PostgreSQL (10.0.0.97)"
 echo "  • Modem: /dev/ttyACM0 @ 57600 baud"
 echo "  • Authentication: Disabled (local mode)"
 echo "  • Performance: Optimized for Pi 5 (4 cores)"
 echo "  • Honeypot: Enabled"
 echo ""
 
-# Create database if it doesn't exist
-echo "📦 Setting up PostgreSQL database..."
-if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw filine_wall; then
-    echo "✓ Database 'filine_wall' already exists"
+# Check if using remote database
+DB_HOST=$(grep DATABASE_URL .env | cut -d'@' -f2 | cut -d':' -f1)
+if [ "$DB_HOST" = "localhost" ] || [ "$DB_HOST" = "127.0.0.1" ]; then
+    # Create local database if it doesn't exist
+    echo "📦 Setting up local PostgreSQL database..."
+    if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw filine_wall; then
+        echo "✓ Database 'filine_wall' already exists"
+    else
+        sudo -u postgres psql -c "CREATE DATABASE filine_wall;" > /dev/null 2>&1
+        sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE filine_wall TO postgres;" > /dev/null 2>&1
+        echo "✓ Created database 'filine_wall'"
+    fi
 else
-    sudo -u postgres psql -c "CREATE DATABASE filine_wall;" > /dev/null 2>&1
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE filine_wall TO postgres;" > /dev/null 2>&1
-    echo "✓ Created database 'filine_wall'"
+    echo "📦 Using remote PostgreSQL database at $DB_HOST"
+    echo "   Skipping local database setup..."
+    echo ""
+    echo "⚠️  Make sure the remote database is configured!"
+    echo "   Run on PostgreSQL server: ./setup-postgres-remote.sh"
 fi
 
 echo ""
