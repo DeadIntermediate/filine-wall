@@ -149,7 +149,13 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/admin/devices", async (req, res) => {
     try {
       // Get registered devices from database
-      const registeredDevices = await db.query.deviceRegistrations.findMany();
+      let registeredDevices = [];
+      try {
+        registeredDevices = await db.query.deviceRegistrations.findMany();
+      } catch (dbError) {
+        console.error('Database not connected for device query:', dbError);
+        // Continue with empty array if DB not available
+      }
       
       // Get modem configuration from environment
       const modemConfig = {
@@ -172,7 +178,7 @@ export function registerRoutes(app: Express): Server {
           status: d.status || 'offline',
           type: d.deviceType || 'Remote Device',
           ipAddress: (d.metadata as any)?.ipAddress || 'N/A',
-          lastHeartbeat: d.lastActive?.toISOString()
+          lastHeartbeat: d.lastActive?.toISOString() || null
         }))
       ];
 
