@@ -2,7 +2,7 @@
   "name": "filine-wall",
   "version": "2.0.0",
   "type": "module",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "scripts": {
     "setup": "node -e \"console.log('Running setup...')\" && npm install && npm run db:push",
     "start:dev": "tsx -r dotenv/config server/index.ts",
