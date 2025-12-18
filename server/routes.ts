@@ -121,7 +121,7 @@ export function registerRoutes(app: Express): Server {
     const [todayBlocks] = await db
       .select({ count: sql<number>`count(*)` })
       .from(callLogs)
-      .where(sql`${callLogs.timestamp} >= ${today}`);
+      .where(sql`${callLogs.timestamp} >= ${today.toISOString()}`);
 
     res.json({
       totalBlocked: totalBlocked?.count ?? 0,
@@ -204,6 +204,78 @@ export function registerRoutes(app: Express): Server {
     res.json(numbers);
   });
 
+  // Stats endpoints for dashboard (open access mode)
+  app.get("/api/stats/daily", async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 7;
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+
+      const stats = await db
+        .select({
+          date: sql<string>`DATE(${callLogs.timestamp})`,
+          blocked: sql<number>`count(*) filter (where ${callLogs.action} = 'blocked')`,
+          allowed: sql<number>`count(*) filter (where ${callLogs.action} = 'allowed')`,
+        })
+        .from(callLogs)
+        .where(sql`${callLogs.timestamp} >= ${startDate.toISOString()} AND ${callLogs.timestamp} <= ${endDate.toISOString()}`)
+        .groupBy(sql`DATE(${callLogs.timestamp})`)
+        .orderBy(sql`DATE(${callLogs.timestamp})`);
+
+      return res.json({
+        daily: stats,
+        dateRange: {
+          start: startDate.toISOString().split('T')[0],
+          end: endDate.toISOString().split('T')[0]
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching daily statistics:', error);
+      return res.status(500).json({
+        message: "Error fetching daily statistics",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.get("/api/stats/distribution", async (req, res) => {
+    try {
+      const distribution = await db
+        .select({
+          hour: sql<number>`EXTRACT(HOUR FROM ${callLogs.timestamp})`,
+          count: sql<number>`count(*)`,
+        })
+        .from(callLogs)
+        .groupBy(sql`EXTRACT(HOUR FROM ${callLogs.timestamp})`)
+        .orderBy(sql`EXTRACT(HOUR FROM ${callLogs.timestamp})`);
+
+      return res.json(distribution);
+    } catch (error) {
+      console.error('Error fetching distribution:', error);
+      return res.status(500).json({
+        message: "Error fetching distribution",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.get("/api/reports", async (req, res) => {
+    try {
+      const reports = await db.query.spamReports.findMany({
+        orderBy: desc(spamReports.reportedAt),
+        limit: 100,
+      });
+      return res.json(reports);
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+      return res.status(500).json({
+        message: "Error fetching reports",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Get all phone numbers (moved to /api/admin)
   app.get("/api/admin/numbers", async (req, res) => {
     const numbers = await db.query.phoneNumbers.findMany({
@@ -272,7 +344,7 @@ export function registerRoutes(app: Express): Server {
           allowed: sql<number>`count(*) filter (where ${callLogs.action} = 'allowed')`,
         })
         .from(callLogs)
-        .where(sql`${callLogs.timestamp} >= ${startDate} AND ${callLogs.timestamp} <= ${endDate}`)
+        .where(sql`${callLogs.timestamp} >= ${startDate.toISOString()} AND ${callLogs.timestamp} <= ${endDate.toISOString()}`)
         .groupBy(sql`DATE(${callLogs.timestamp})`)
         .orderBy(sql`DATE(${callLogs.timestamp})`);
 
@@ -305,7 +377,7 @@ export function registerRoutes(app: Express): Server {
         count: sql<number>`count(*)`,
       })
       .from(callLogs)
-      .where(sql`${callLogs.timestamp} >= ${startTime}`)
+      .where(sql`${callLogs.timestamp} >= ${startTime.toISOString()}`)
       .groupBy(callLogs.latitude, callLogs.longitude)
       .having(sql`${callLogs.latitude} is not null and ${callLogs.longitude} is not null`);
 

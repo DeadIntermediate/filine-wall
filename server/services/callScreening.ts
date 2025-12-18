@@ -335,51 +335,62 @@ export async function screenCall(
 }
 
 export async function logCall(phoneNumber: string, result: ScreeningResult, deviceId?: string) {
-  const callerIdInfo = {
-    name: "Unknown",
-    type: "Unknown",
-    presentation: "allowed",
-    verified: false,
-    timestamp: new Date().toISOString()
-  };
+  try {
+    const callerIdInfo = {
+      name: "Unknown",
+      type: "Unknown",
+      presentation: "allowed",
+      verified: false,
+      timestamp: new Date().toISOString()
+    };
 
-  const carrierInfo = {
-    name: result.metadata?.carrierName,
-    type: result.metadata?.carrierType,
-    country: result.metadata?.carrierCountry,
-    mobile: result.metadata?.isMobile
-  };
+    const carrierInfo = {
+      name: result.metadata?.carrierName,
+      type: result.metadata?.carrierType,
+      country: result.metadata?.carrierCountry,
+      mobile: result.metadata?.isMobile
+    };
 
-  await db.insert(callLogs).values({
-    phoneNumber,
-    action: result.action === "challenge" ? "blocked" : result.action,
-    callerId: callerIdInfo,
-    carrierInfo,
-    metadata: {
-      reason: result.reason,
+    await db.insert(callLogs).values({
+      phoneNumber,
+      action: result.action === "challenge" ? "blocked" : result.action,
+      callerId: callerIdInfo,
+      carrierInfo,
+      deviceId: deviceId || null,
+      metadata: {
+        reason: result.reason,
+        risk: result.risk,
+        features: result.features,
+        dncStatus: result.dncStatus,
+        prediction: result.prediction,
+        voiceAnalysis: result.voiceAnalysis,
+        verification: result.verification ? {
+          provided: true,
+          expiresAt: result.verification.expiresAt
+        } : undefined,
+        lineType: result.metadata?.lineType || "unknown",
+        carrierName: result.metadata?.carrierName,
+        carrierType: result.metadata?.carrierType,
+        carrierCountry: result.metadata?.carrierCountry,
+        isMobile: result.metadata?.isMobile,
+        developmentMode: result.metadata?.developmentMode
+      }
+    });
+
+    // Log call to database
+    logger.debug('Call logged to database', 'CallScreening', {
+      phoneNumber,
+      action: result.action,
       risk: result.risk,
-      features: result.features,
-      dncStatus: result.dncStatus,
-      prediction: result.prediction,
-      voiceAnalysis: result.voiceAnalysis,
-      verification: result.verification ? {
-        provided: true,
-        expiresAt: result.verification.expiresAt
-      } : undefined,
-      lineType: result.metadata?.lineType || "unknown",
-      carrierName: result.metadata?.carrierName,
-      carrierType: result.metadata?.carrierType,
-      carrierCountry: result.metadata?.carrierCountry,
-      isMobile: result.metadata?.isMobile,
-      developmentMode: result.metadata?.developmentMode
-    }
-  });
-
-  // Log call to database
-  logger.debug('Call logged to database', 'CallScreening', {
-    phoneNumber,
-    action: result.action,
-    risk: result.risk,
-    deviceId
-  });
+      deviceId
+    });
+  } catch (error) {
+    logger.error('Failed to log call to database', error as Error, 'CallScreening', {
+      phoneNumber,
+      action: result.action,
+      deviceId,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error'
+    });
+    // Don't throw - we don't want logging failures to crash the screening process
+  }
 }

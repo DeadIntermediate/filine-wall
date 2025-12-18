@@ -17,13 +17,20 @@ fi
 
 # Get the actual user (not root)
 ACTUAL_USER="${SUDO_USER:-$USER}"
-INSTALL_DIR="/home/$ACTUAL_USER/filine-wall/device-client"
+# Use the current script directory to determine install path
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DIR="$(dirname "$SCRIPT_DIR")/device-client"
 
-echo "📦 Installing Python dependencies..."
-apt-get update -qq
-apt-get install -y python3-serial python3-requests python3-cryptography > /dev/null 2>&1
-
-echo "✓ Dependencies installed"
+echo "📦 Checking Python dependencies..."
+# Check if required packages are installed
+python3 -c "import serial, requests, cryptography" 2>/dev/null
+if [ $? -eq 0 ]; then
+    echo "✓ All required Python packages are installed"
+else
+    echo "Installing missing packages via pip..."
+    python3 -m pip install pyserial requests cryptography
+    echo "✓ Dependencies installed"
+fi
 echo ""
 
 # Create config directory

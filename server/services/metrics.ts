@@ -155,10 +155,10 @@ export class CallScreeningMetrics {
       db.select({ count: sql<number>`count(*)` }).from(callLogs),
       db.select({ count: sql<number>`count(*)` })
         .from(callLogs)
-        .where(sql`${callLogs.timestamp} >= ${yesterday}`),
+        .where(sql`${callLogs.timestamp} >= ${yesterday.toISOString()}`),
       db.select({ count: sql<number>`count(*)` })
         .from(callLogs)
-        .where(sql`${callLogs.timestamp} >= ${weekAgo}`)
+        .where(sql`${callLogs.timestamp} >= ${weekAgo.toISOString()}`)
     ]);
 
     // Get top blocked reasons

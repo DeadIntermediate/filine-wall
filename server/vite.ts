@@ -76,7 +76,16 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(__dirname, "public");
+  // In production, __dirname is 'dist', so look for 'public' there
+  // In development, __dirname is 'server', so look for '../dist/public'
+  const distPath = process.env.NODE_ENV === 'production'
+    ? path.resolve(__dirname, "public")
+    : path.resolve(__dirname, "..", "dist", "public");
+
+  console.log(`[serveStatic] Looking for build at: ${distPath}`);
+  console.log(`[serveStatic] __dirname: ${__dirname}`);
+  console.log(`[serveStatic] NODE_ENV: ${process.env.NODE_ENV}`);
+  console.log(`[serveStatic] Exists: ${fs.existsSync(distPath)}`);
 
   if (!fs.existsSync(distPath)) {
     throw new Error(
