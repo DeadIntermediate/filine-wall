@@ -11,11 +11,12 @@ from configparser import ConfigParser
 from encryption import DeviceEncryption
 
 # Setup logging
+# When running as systemd service, logs go to systemd journal
+# Use: sudo journalctl -u call-detector -f
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/var/log/call-detector.log'),
         logging.StreamHandler(sys.stdout)
     ]
 )
