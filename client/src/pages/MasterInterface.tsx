@@ -188,10 +188,16 @@ export default function MasterInterface() {
         <div className="flex-1 overflow-y-auto p-6">
           {activeTab === "overview" && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <RiskScoreGauge score={riskScore?.currentRisk ?? 0} label="System Risk Score" />
-                <Statistics />
-                <Card>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+                <div className="h-full">
+                  <RiskScoreGauge score={riskScore?.currentRisk ?? 0} label="System Risk Score" />
+                </div>
+                <Card className="h-full">
+                  <CardContent className="pt-6">
+                    <Statistics />
+                  </CardContent>
+                </Card>
+                <Card className="h-full">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Monitor className="h-5 w-5" />
@@ -263,7 +269,14 @@ export default function MasterInterface() {
                   </CardContent>
                 </Card>
               </div>
-              <SpamReportList />
+              <Card>
+                <CardHeader>
+                  <CardTitle>Community Spam Reports</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <SpamReportList />
+                </CardContent>
+              </Card>
             </div>
           )}
 
