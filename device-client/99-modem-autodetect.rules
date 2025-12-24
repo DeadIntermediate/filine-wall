@@ -1,0 +1,19 @@
+# Udev rule for automatic modem detection and configuration
+# Place this file in /etc/udev/rules.d/99-modem-autodetect.rules
+
+# Detect USB serial devices (modems)
+# When a USB-to-serial device is plugged in, run the auto-config script
+
+# USRobotics modems
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0baf", ACTION=="add", RUN+="/home/deadintermediate/filine-wall-1/device-client/modem-autoconfig.sh /dev/%k"
+
+# Generic USB CDC ACM devices (most USB modems)
+SUBSYSTEM=="tty", ATTRS{interface}=="*Modem*", ACTION=="add", RUN+="/home/deadintermediate/filine-wall-1/device-client/modem-autoconfig.sh /dev/%k"
+SUBSYSTEM=="tty", KERNEL=="ttyACM*", ACTION=="add", RUN+="/home/deadintermediate/filine-wall-1/device-client/modem-autoconfig.sh /dev/%k"
+
+# Generic USB-to-serial adapters
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="add", RUN+="/home/deadintermediate/filine-wall-1/device-client/modem-autoconfig.sh /dev/%k"
+
+# Add modem to dialout group for user access
+SUBSYSTEM=="tty", KERNEL=="ttyACM*", MODE="0666", GROUP="dialout"
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", MODE="0666", GROUP="dialout"
