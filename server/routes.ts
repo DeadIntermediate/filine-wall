@@ -568,6 +568,110 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Device endpoints (for device client - no admin prefix)
+  // Screen call endpoint for device client
+  app.post("/api/devices/:deviceId/screen", async (req, res) => {
+    const { deviceId } = req.params;
+    const { data: encryptedData } = req.body;
+    const authToken = req.headers.authorization?.split(' ')[1];
+
+    // Verify device auth token
+    const device = await db.query.deviceConfigurations.findFirst({
+      where: eq(deviceConfigurations.deviceId, deviceId),
+    });
+
+    if (!device || device.authToken !== authToken) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Decrypt device data if encryption is enabled
+    const encryption = getEncryptionService();
+    let phoneNumber: string;
+    
+    try {
+      const deviceSettings = device.settings as { encryptionEnabled?: boolean } | null;
+      const encryptionEnabled = deviceSettings?.encryptionEnabled ?? false;
+      const decryptedData = encryptionEnabled 
+        ? encryption.decryptDeviceData(encryptedData)
+        : encryptedData;
+      const parsedData = JSON.parse(decryptedData);
+      phoneNumber = parsedData.phoneNumber;
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid encrypted data" });
+    }
+
+    if (!phoneNumber) {
+      return res.status(400).json({ message: "Phone number is required" });
+    }
+
+    try {
+      const result = await screenCall(phoneNumber);
+      await logCall(phoneNumber, result, deviceId);
+
+      // Encrypt response if device encryption is enabled
+      const deviceSettings = device.settings as { encryptionEnabled?: boolean } | null;
+      const encryptionEnabled = deviceSettings?.encryptionEnabled ?? false;
+      const responseData = encryptionEnabled
+        ? encryption.encryptDeviceData(JSON.stringify(result))
+        : JSON.stringify(result);
+      
+      return res.json({ data: responseData });
+    } catch (error) {
+      console.error("Error screening call:", error);
+      return res.status(500).json({ message: "Error screening call" });
+    }
+  });
+
+  // Device heartbeat endpoint
+  app.post("/api/devices/:deviceId/heartbeat", async (req, res) => {
+    const { deviceId } = req.params;
+    const { data: encryptedData } = req.body;
+    const authToken = req.headers.authorization?.split(' ')[1];
+
+    // Verify device auth token
+    const device = await db.query.deviceConfigurations.findFirst({
+      where: eq(deviceConfigurations.deviceId, deviceId),
+    });
+
+    if (!device || device.authToken !== authToken) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Decrypt heartbeat data if encryption is enabled
+    const encryption = getEncryptionService();
+    let heartbeatData: any;
+    
+    try {
+      const deviceSettings = device.settings as { encryptionEnabled?: boolean } | null;
+      const encryptionEnabled = deviceSettings?.encryptionEnabled ?? false;
+      const decryptedData = encryptionEnabled
+        ? encryption.decryptDeviceData(encryptedData)
+        : encryptedData;
+      heartbeatData = JSON.parse(decryptedData);
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid encrypted data" });
+    }
+
+    // Update device status and last heartbeat
+    const [updated] = await db
+      .update(deviceConfigurations)
+      .set({
+        status: 'online',
+        lastHeartbeat: new Date(),
+      })
+      .where(eq(deviceConfigurations.deviceId, deviceId))
+      .returning();
+
+    // Encrypt response if device encryption is enabled
+    const deviceSettings = device.settings as { encryptionEnabled?: boolean } | null;
+    const encryptionEnabled = deviceSettings?.encryptionEnabled ?? false;
+    const responseData = encryptionEnabled
+      ? encryption.encryptDeviceData(JSON.stringify(updated))
+      : JSON.stringify(updated);
+      
+    return res.json({ data: responseData });
+  });
+
   // Screen call with device information and encryption (moved to /api/admin)
   app.post("/api/admin/devices/:deviceId/screen", async (req, res) => {
     const { deviceId } = req.params;
