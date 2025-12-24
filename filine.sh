@@ -72,6 +72,13 @@ ${GREEN}MAINTENANCE:${NC}
   ${CYAN}optimize${NC}           Optimize for Raspberry Pi
   ${CYAN}package${NC}            Package for deployment
 
+${GREEN}MODEM & DEVICE CLIENT:${NC}
+  ${CYAN}modem-setup${NC}        Setup modem hardware and dependencies
+  ${CYAN}modem-install-service${NC}  Install call detector as systemd service
+  ${CYAN}modem-install-autodetect${NC}  Install automatic modem detection
+  ${CYAN}modem-status${NC}       Check modem and service status
+  ${CYAN}modem-service${NC} <action>  Manage service (start|stop|restart|status|logs)
+
 ${GREEN}NETWORK:${NC}
   ${CYAN}enable-network${NC}     Enable network access
 
@@ -84,6 +91,8 @@ ${YELLOW}EXAMPLES:${NC}
   ./filine.sh status         # Check if running
   ./filine.sh install        # Full installation
   ./filine.sh db-provision   # Setup database
+  ./filine.sh modem-setup    # Setup modem hardware
+  ./filine.sh modem-service start  # Start call detector
 
 EOF
 }
@@ -668,6 +677,289 @@ cmd_enable_network() {
 }
 
 # ============================================================================
+# MODEM & DEVICE CLIENT
+# ============================================================================
+
+cmd_modem_setup() {
+    log_info "Setting up modem and device client..."
+    
+    if [ "$EUID" -ne 0 ]; then 
+        log_error "This command requires root privileges"
+        log_info "Run: sudo ./filine.sh modem-setup"
+        exit 1
+    fi
+    
+    # Install dependencies
+    log_info "Installing modem dependencies..."
+    apt-get update
+    apt-get install -y nodejs npm udev usb-modeswitch usb-modeswitch-data ppp \
+        modemmanager libqmi-utils portaudio19-dev jq python3-pip
+    
+    # Install Python packages
+    python3 -m pip install pyserial requests cryptography
+    
+    # Create service user
+    log_info "Creating service user..."
+    useradd -r -s /bin/false calldetector 2>/dev/null || true
+    usermod -a -G dialout calldetector
+    
+    # Create directories
+    mkdir -p /etc/call-detector /var/log/call-detector
+    chown calldetector:calldetector /var/log/call-detector
+    chmod 700 /etc/call-detector
+    
+    # Create udev rules for supported modems
+    log_info "Creating udev rules..."
+    cat > /etc/udev/rules.d/99-supported-modems.rules << 'EOL'
+# USRobotics 5637 USB Fax Modem
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0baf", ATTRS{idProduct}=="0303", SYMLINK+="ttyUSB-modem", MODE="0660", GROUP="dialout"
+# Prolific chipset
+SUBSYSTEM=="tty", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", SYMLINK+="ttyUSB-modem", MODE="0660", GROUP="dialout"
+# StarTech 56k USB V.92 Modem
+SUBSYSTEM=="tty", ATTRS{idVendor}=="06cd", ATTRS{idProduct}=="0121", SYMLINK+="ttyUSB-modem", MODE="0660", GROUP="dialout"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0557", ATTRS{idProduct}=="2008", SYMLINK+="ttyUSB-modem", MODE="0660", GROUP="dialout"
+EOL
+    
+    # Reload udev
+    udevadm control --reload-rules
+    udevadm trigger
+    
+    log_success "Modem setup complete"
+}
+
+cmd_modem_install_service() {
+    log_info "Installing call detector service..."
+    
+    if [ "$EUID" -ne 0 ]; then 
+        log_error "This command requires root privileges"
+        log_info "Run: sudo ./filine.sh modem-install-service"
+        exit 1
+    fi
+    
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    DEVICE_CLIENT_DIR="$SCRIPT_DIR/device-client"
+    
+    # Create config directory
+    mkdir -p /etc/call-detector
+    chmod 755 /etc/call-detector
+    
+    # Create default config if it doesn't exist
+    if [ ! -f /etc/call-detector/config.ini ]; then
+        log_info "Creating default configuration..."
+        cat > /etc/call-detector/config.ini << 'EOF'
+[server]
+url = http://localhost:5000
+
+[device]
+id = raspberry-pi-filine
+auth_token = local-dev-token-no-auth-required
+
+[modem]
+device = /dev/ttyUSB0
+baudrate = 115200
+EOF
+    fi
+    
+    # Create systemd service
+    log_info "Creating systemd service..."
+    cat > /etc/systemd/system/call-detector.service << EOF
+[Unit]
+Description=FiLine Wall Call Detector
+After=network.target
+
+[Service]
+Type=simple
+User=calldetector
+Group=dialout
+WorkingDirectory=$DEVICE_CLIENT_DIR
+ExecStart=/usr/bin/python3 $DEVICE_CLIENT_DIR/call_detector.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    # Reload systemd and enable service
+    systemctl daemon-reload
+    systemctl enable call-detector.service
+    
+    log_success "Service installed"
+    log_info "Start with: sudo systemctl start call-detector.service"
+}
+
+cmd_modem_status() {
+    log_info "Checking modem status..."
+    
+    echo ""
+    echo -e "${CYAN}1. USB Devices:${NC}"
+    lsusb | grep -i "modem\|serial\|robotics" || echo "   No modem-like devices found"
+    
+    echo ""
+    echo -e "${CYAN}2. Serial Devices:${NC}"
+    if ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null; then
+        ls -l /dev/ttyACM* /dev/ttyUSB* 2>/dev/null
+    else
+        log_error "No serial devices found"
+    fi
+    
+    echo ""
+    echo -e "${CYAN}3. Call Detector Service:${NC}"
+    if systemctl is-active --quiet call-detector.service 2>/dev/null; then
+        log_success "Service is running"
+        echo ""
+        echo "Recent logs:"
+        journalctl -u call-detector.service -n 10 --no-pager
+    else
+        log_warning "Service is not running"
+    fi
+    
+    echo ""
+    echo -e "${CYAN}4. Configuration:${NC}"
+    if [ -f /etc/call-detector/config.ini ]; then
+        cat /etc/call-detector/config.ini
+    else
+        log_warning "Config file not found"
+    fi
+}
+
+cmd_modem_service() {
+    local action="${2:-status}"
+    
+    case "$action" in
+        start)
+            log_info "Starting call detector service..."
+            sudo systemctl start call-detector.service
+            log_success "Service started"
+            ;;
+        stop)
+            log_info "Stopping call detector service..."
+            sudo systemctl stop call-detector.service
+            log_success "Service stopped"
+            ;;
+        restart)
+            log_info "Restarting call detector service..."
+            sudo systemctl restart call-detector.service
+            log_success "Service restarted"
+            ;;
+        status)
+            systemctl status call-detector.service
+            ;;
+        logs)
+            journalctl -u call-detector.service -f
+            ;;
+        *)
+            log_error "Unknown action: $action"
+            log_info "Usage: ./filine.sh modem-service {start|stop|restart|status|logs}"
+            exit 1
+            ;;
+    esac
+}
+
+cmd_modem_install_autodetect() {
+    log_info "Installing modem auto-detection..."
+    
+    if [ "$EUID" -ne 0 ]; then 
+        log_error "This command requires root privileges"
+        log_info "Run: sudo ./filine.sh modem-install-autodetect"
+        exit 1
+    fi
+    
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    # Create auto-config script
+    log_info "Creating modem auto-config script..."
+    cat > /usr/local/bin/modem-autoconfig.sh << 'AUTOCONFIG_SCRIPT'
+#!/bin/bash
+MODEM_DEVICE=$1
+LOG_FILE="/var/log/modem-autoconfig.log"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+log "Modem detected: $MODEM_DEVICE"
+sleep 2
+
+if [ ! -e "$MODEM_DEVICE" ]; then
+    log "ERROR: Device $MODEM_DEVICE not found"
+    exit 1
+fi
+
+python3 << 'EOF'
+import serial, time, sys
+
+device = sys.argv[1] if len(sys.argv) > 1 else '$MODEM_DEVICE'
+log_file = '$LOG_FILE'
+
+try:
+    with open(log_file, 'a') as log:
+        log.write(f"Opening modem on {device}...\n")
+        modem = serial.Serial(device, 57600, timeout=2)
+        
+        # Reset and configure
+        commands = [
+            ('ATZ', 'Reset'),
+            ('AT+VCID=1', 'Enable Caller ID'),
+            ('AT#CID=1', 'Alt Caller ID'),
+            ('AT+CLIP=1', 'CLIP'),
+        ]
+        
+        for cmd, desc in commands:
+            log.write(f"Sending {cmd} ({desc})...\n")
+            modem.write(f'{cmd}\r'.encode())
+            time.sleep(0.5)
+            response = modem.read(modem.in_waiting).decode(errors='ignore')
+            log.write(f"Response: {response.strip()}\n")
+        
+        modem.close()
+        log.write("✓ Modem configured successfully\n")
+except Exception as e:
+    with open(log_file, 'a') as log:
+        log.write(f"ERROR: {str(e)}\n")
+    sys.exit(1)
+EOF
+
+# Update config and restart service
+if [ $? -eq 0 ]; then
+    log "✓ Modem configured successfully"
+    if [ -f "/etc/call-detector/config.ini" ]; then
+        sed -i "s|^device = .*|device = $MODEM_DEVICE|" /etc/call-detector/config.ini
+    fi
+    systemctl restart call-detector.service 2>/dev/null
+    log "Service restarted"
+fi
+AUTOCONFIG_SCRIPT
+    
+    chmod +x /usr/local/bin/modem-autoconfig.sh
+    log_success "Auto-config script installed"
+    
+    # Install udev rule
+    log_info "Installing udev rule..."
+    cat > /etc/udev/rules.d/99-modem-autodetect.rules << 'EOF'
+# Automatic modem detection
+SUBSYSTEM=="tty", KERNEL=="ttyACM*", ACTION=="add", RUN+="/usr/local/bin/modem-autoconfig.sh /dev/%k"
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="add", RUN+="/usr/local/bin/modem-autoconfig.sh /dev/%k"
+SUBSYSTEM=="tty", KERNEL=="ttyACM*", MODE="0666", GROUP="dialout"
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", MODE="0666", GROUP="dialout"
+EOF
+    
+    # Reload udev
+    udevadm control --reload-rules
+    udevadm trigger
+    
+    # Create log file
+    touch /var/log/modem-autoconfig.log
+    chmod 666 /var/log/modem-autoconfig.log
+    
+    log_success "Auto-detection installed"
+    log_info "Unplug and replug your modem to test"
+    log_info "Monitor with: tail -f /var/log/modem-autoconfig.log"
+}
+
+# ============================================================================
 # VERSION
 # ============================================================================
 
@@ -716,6 +1008,13 @@ case "${1:-}" in
     update)             cmd_update ;;
     optimize)           cmd_optimize ;;
     package)            cmd_package ;;
+    
+    # Modem & Device Client
+    modem-setup)        cmd_modem_setup ;;
+    modem-install-service) cmd_modem_install_service ;;
+    modem-install-autodetect) cmd_modem_install_autodetect ;;
+    modem-status)       cmd_modem_status ;;
+    modem-service)      cmd_modem_service "$@" ;;
     
     # Network
     enable-network)     cmd_enable_network ;;

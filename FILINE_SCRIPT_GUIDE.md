@@ -1,6 +1,6 @@
 # FiLine Wall - Unified Management Script Guide
 
-All shell scripts have been consolidated into a single, easy-to-use management script: **`filine.sh`**
+All shell scripts (35 total) have been consolidated into a single, easy-to-use management script: **`filine.sh`**
 
 ## Quick Start
 
@@ -40,6 +40,17 @@ chmod +x filine.sh
 ./filine.sh setup-postgres  # Setup PostgreSQL database
 ```
 
+### Modem & Device Client
+```bash
+./filine.sh modem-setup                # Setup modem hardware
+./filine.sh modem-install-service      # Install as systemd service
+./filine.sh modem-install-autodetect   # Install auto-detection
+./filine.sh modem-status               # Check modem status
+./filine.sh modem-service start        # Start call detector
+./filine.sh modem-service stop         # Stop call detector
+./filine.sh modem-service logs         # View service logs
+```
+
 ### Database Operations
 ```bash
 ./filine.sh db-provision    # Provision database schema
@@ -67,13 +78,19 @@ chmod +x filine.sh
 
 ## What Changed?
 
-**Before:** 29 separate shell scripts cluttering the root directory
+**Before:** 35 separate shell scripts cluttering the project
 ```
+Root directory (29 scripts):
 check-env.sh, check-status.sh, diagnose-modem-pi.sh, 
 enable-network-access.sh, filine-ctl.sh, fix-database.sh,
 fix-dependencies.sh, fix-env.sh, fix-imports.sh, 
 install-complete.sh, manage-filine.sh, optimize-pi5.sh,
 ... and 17 more files!
+
+device-client directory (6 scripts):
+setup.sh, install-service.sh, check-modem-status.sh,
+modem-autoconfig.sh, install-modem-autodetect.sh,
+update-on-pi.sh
 ```
 
 **After:** 1 unified script with organized commands
@@ -83,17 +100,19 @@ filine.sh    # All functionality in one place
 
 ## Benefits
 
-✅ **Cleaner directory structure** - No more script clutter  
-✅ **Easier to use** - One command to remember  
+✅ **Dramatically cleaner** - Removed 35 scattered scripts  
+✅ **Single command** - One script to rule them all  
 ✅ **Better organized** - Logical command grouping  
 ✅ **Consistent interface** - All commands follow same pattern  
 ✅ **Built-in help** - `./filine.sh help` shows everything  
-✅ **Easier to maintain** - Update one file instead of many  
+✅ **Easier maintenance** - Update one file instead of 35  
+✅ **No more confusion** - Clear command names  
 
 ## Migration Notes
 
 All functionality from the old scripts has been preserved and organized into the new unified script. The command names are intuitive and match their original purposes:
 
+### Root Scripts
 | Old Script | New Command |
 |------------|-------------|
 | start-filine.sh | `./filine.sh start` |
@@ -105,7 +124,15 @@ All functionality from the old scripts has been preserved and organized into the
 | test-db-connection.sh | `./filine.sh db-test` |
 | diagnose-modem-pi.sh | `./filine.sh diagnose-modem` |
 | update-from-github.sh | `./filine.sh update` |
-| ... | ... |
+
+### device-client Scripts  
+| Old Script | New Command |
+|------------|-------------|
+| device-client/setup.sh | `./filine.sh modem-setup` |
+| device-client/install-service.sh | `./filine.sh modem-install-service` |
+| device-client/check-modem-status.sh | `./filine.sh modem-status` |
+| device-client/install-modem-autodetect.sh | `./filine.sh modem-install-autodetect` |
+| device-client/modem-autoconfig.sh | Embedded in auto-detect |
 
 ## Tips
 
