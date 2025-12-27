@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FCCDatabaseView } from "@/components/FCCDatabaseView";
 import { DeviceConfigPanel } from "@/components/DeviceConfigPanel";
 import { DeviceDiagnosticTool } from "@/components/DeviceDiagnosticTool";
@@ -13,6 +14,7 @@ import { RiskScoreGauge } from "@/components/RiskScoreGauge";
 import { GitHubWizard } from "@/components/GitHubWizard";
 import { CallMonitor } from "@/components/CallMonitor";
 import { Settings, type Setting } from "@/components/ui/settings";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
   LayoutDashboard, 
   Smartphone, 
@@ -23,7 +25,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
-  Monitor
+  Monitor,
+  HelpCircle,
+  Keyboard,
+  Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +62,7 @@ export default function MasterInterface() {
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Fetch connected devices status
   const { data: devices = [] } = useQuery<Device[]>({
@@ -79,12 +85,63 @@ export default function MasterInterface() {
     queryKey: ["/api/admin/settings"],
   });
 
-  // Select first device by default
+  // Keyboard shortcuts
   useEffect(() => {
-    if (devices.length > 0 && !selectedDeviceId && devices[0]) {
-      setSelectedDeviceId(devices[0].deviceId);
-    }
-  }, [devices, selectedDeviceId]);
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // Only handle shortcuts when not typing in an input
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      switch (event.key) {
+        case '1':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            setActiveTab("overview");
+          }
+          break;
+        case '2':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            setActiveTab("monitor");
+          }
+          break;
+        case '3':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            setActiveTab("devices");
+          }
+          break;
+        case '4':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            setActiveTab("database");
+          }
+          break;
+        case '5':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            setActiveTab("analytics");
+          }
+          break;
+        case '6':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            setActiveTab("settings");
+          }
+          break;
+        case 'b':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            setSidebarCollapsed(!sidebarCollapsed);
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [sidebarCollapsed]);
 
   const menuItems = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -97,7 +154,8 @@ export default function MasterInterface() {
   ];
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <TooltipProvider>
+      <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
       <aside
         className={cn(
@@ -128,26 +186,34 @@ export default function MasterInterface() {
           {menuItems.map((item) => {
             const Icon = item.icon;
             return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={cn(
-                  "w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors text-left",
-                  activeTab === item.id
-                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-medium"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              <Tooltip key={item.id}>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setActiveTab(item.id)}
+                    className={cn(
+                      "w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors text-left",
+                      activeTab === item.id
+                        ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-medium"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    )}
+                  >
+                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    {!sidebarCollapsed && <span>{item.label}</span>}
+                  </button>
+                </TooltipTrigger>
+                {sidebarCollapsed && (
+                  <TooltipContent side="right">
+                    <p>{item.label}</p>
+                  </TooltipContent>
                 )}
-              >
-                <Icon className="h-5 w-5 flex-shrink-0" />
-                {!sidebarCollapsed && <span>{item.label}</span>}
-              </button>
+              </Tooltip>
             );
           })}
         </nav>
 
         {/* System Status */}
         {!sidebarCollapsed && (
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600 dark:text-gray-400">System Status</span>
               <div className="flex items-center space-x-2">
@@ -162,6 +228,42 @@ export default function MasterInterface() {
                 </span>
               </div>
             </div>
+
+            {/* Quick Actions */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Quick Actions
+              </h4>
+              <div className="space-y-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-xs h-8"
+                  onClick={() => setActiveTab("monitor")}
+                >
+                  <Monitor className="h-3 w-3 mr-2" />
+                  View Live Calls
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-xs h-8"
+                  onClick={() => setActiveTab("analytics")}
+                >
+                  <BarChart3 className="h-3 w-3 mr-2" />
+                  View Analytics
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-xs h-8"
+                  onClick={() => setActiveTab("settings")}
+                >
+                  <SettingsIcon className="h-3 w-3 mr-2" />
+                  System Settings
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </aside>
@@ -174,6 +276,36 @@ export default function MasterInterface() {
             {menuItems.find(item => item.id === activeTab)?.label || "Dashboard"}
           </h2>
           <div className="flex items-center space-x-4">
+            <div className="relative hidden md:block">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 w-64"
+              />
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Keyboard className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <div className="space-y-2">
+                  <p className="font-semibold">Keyboard Shortcuts</p>
+                  <div className="text-sm space-y-1">
+                    <div>Ctrl+1: Overview</div>
+                    <div>Ctrl+2: Monitor</div>
+                    <div>Ctrl+3: Devices</div>
+                    <div>Ctrl+4: Database</div>
+                    <div>Ctrl+5: Analytics</div>
+                    <div>Ctrl+6: Settings</div>
+                    <div>Ctrl+B: Toggle Sidebar</div>
+                  </div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
             <div className="text-sm text-gray-600 dark:text-gray-400">
               {stats && (
                 <span>
@@ -186,8 +318,40 @@ export default function MasterInterface() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-6">
+          <div
+            key={activeTab}
+            className="animate-in fade-in-0 slide-in-from-bottom-4 duration-300"
+          >
           {activeTab === "overview" && (
             <div className="space-y-6">
+              {/* Welcome Section */}
+              <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-blue-200 dark:border-blue-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                        Welcome to FiLine Wall
+                      </h1>
+                      <p className="text-gray-600 dark:text-gray-400 mb-4">
+                        Your advanced call protection system is active and monitoring your phone line.
+                      </p>
+                      <div className="flex items-center gap-4 text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <span className="text-green-600 dark:text-green-400 font-medium">System Online</span>
+                        </div>
+                        <div className="text-gray-500 dark:text-gray-400">
+                          Last updated: {new Date().toLocaleTimeString()}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="hidden md:block">
+                      <Shield className="h-16 w-16 text-blue-600 dark:text-blue-400" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
                 <div className="h-full">
                   <RiskScoreGauge score={riskScore?.currentRisk ?? 0} label="System Risk Score" />
@@ -200,19 +364,35 @@ export default function MasterInterface() {
                 <Card className="h-full">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Monitor className="h-5 w-5" />
+                      <Smartphone className="h-5 w-5" />
                       Connected Devices
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
                       {devices.length === 0 ? (
-                        <p className="text-sm text-gray-500">No devices detected</p>
+                        <div className="text-center py-8">
+                          <Smartphone className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                            No Devices Connected
+                          </h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            Connect a modem or device to start monitoring your phone line.
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setActiveTab("devices")}
+                          >
+                            Configure Device
+                          </Button>
+                        </div>
                       ) : (
                         devices.map((device) => (
                           <div 
                             key={device.deviceId} 
-                            className="p-3 border rounded-lg dark:border-gray-700 space-y-2"
+                            className="p-3 border rounded-lg dark:border-gray-700 space-y-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                            onClick={() => setSelectedDeviceId(device.deviceId)}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
@@ -353,8 +533,10 @@ export default function MasterInterface() {
               </Card>
             </div>
           )}
+          </div>
         </div>
       </main>
     </div>
+    </TooltipProvider>
   );
 }

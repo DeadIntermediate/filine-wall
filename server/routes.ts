@@ -31,8 +31,7 @@ export type VoiceAnalysisResult = {
   reason: string;
 };
 
-export function registerRoutes(app: Express): Server {
-  // Health check endpoint
+export async function registerRoutes(app: Express): Server {
   app.get("/health", async (req, res) => {
     try {
       // Check database connectivity
@@ -188,13 +187,88 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Test endpoint to simulate incoming calls (for testing the monitor)
+  app.post("/api/admin/test-call", async (req, res) => {
+    const { phoneNumber, action = 'allowed', riskScore = 0.1, reason = 'Test call' } = req.body;
+
+    if (!phoneNumber) {
+      return res.status(400).json({ message: "Phone number is required" });
+    }
+
+    try {
+      // Create a test call log entry
+      const [callLog] = await db
+        .insert(callLogs)
+        .values({
+          phoneNumber,
+          action,
+          callerId: {
+            name: `Test Caller ${phoneNumber.slice(-4)}`,
+            presentation: 'allowed',
+            screening: 'passed'
+          },
+          metadata: {
+            risk: riskScore,
+            reason,
+            source: 'test',
+            testCall: true
+          }
+        })
+        .returning();
+
+      res.json({
+        message: "Test call logged successfully",
+        callLog: {
+          id: callLog.id,
+          phoneNumber: callLog.phoneNumber,
+          callerName: `Test Caller ${phoneNumber.slice(-4)}`,
+          timestamp: callLog.timestamp.toISOString(),
+          action,
+          riskScore,
+          reason,
+          source: 'test'
+        }
+      });
+    } catch (error) {
+      console.error('Error creating test call:', error);
+      res.status(500).json({ message: "Failed to create test call" });
+    }
+  });
+
   // User routes - Open access
   app.get("/api/user/calls", async (req, res) => {
-    const logs = await db.query.callLogs.findMany({
-      orderBy: desc(callLogs.timestamp),
-      limit: 100,
-    });
-    res.json(logs);
+    try {
+      const logs = await db.query.callLogs.findMany({
+        orderBy: desc(callLogs.timestamp),
+        limit: 100,
+        // Transform the data to match the frontend interface
+        columns: {
+          id: true,
+          phoneNumber: true,
+          timestamp: true,
+          action: true,
+          metadata: true,
+          callerId: true,
+        }
+      });
+
+      // Transform the data to match the CallLog interface
+      const transformedLogs = logs.map(log => ({
+        id: log.id,
+        phoneNumber: log.phoneNumber,
+        callerName: (log.callerId as any)?.name || (log.callerId as any)?.callerName,
+        timestamp: log.timestamp.toISOString(),
+        action: log.action as 'blocked' | 'allowed' | 'screened',
+        riskScore: (log.metadata as any)?.risk || 0,
+        reason: (log.metadata as any)?.reason,
+        source: (log.metadata as any)?.source || 'modem',
+      }));
+
+      res.json(transformedLogs);
+    } catch (error) {
+      console.error('Error fetching call logs:', error);
+      res.status(500).json({ message: "Failed to fetch call logs" });
+    }
   });
 
   app.get("/api/user/numbers", async (req, res) => {
