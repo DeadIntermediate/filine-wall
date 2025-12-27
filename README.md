@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/DeadIntermediate/filine-wall/main/q
 
 **What it does:**
 - Clones FiLine Wall repository to `~/filine-wall`
-- Installs PostgreSQL 18 and Node.js 20
+- Installs **MariaDB** and Node.js 20
 - Sets up all dependencies
 - Configures database
 - Ready to use!
@@ -69,7 +69,7 @@ chmod +x install-complete.sh
 
 ### Software Dependencies
 - **Node.js** 18+ (automatically installed)
-- **PostgreSQL** 13+ (automatically installed)
+- **MariaDB** (automatically installed)
 - **Redis** 6+ (optional, for caching)
 - **Python** 3.8+ (for device client)
 
@@ -79,7 +79,7 @@ chmod +x install-complete.sh
 - **Web Interface**: React + TypeScript frontend with real-time dashboard
 - **API Server**: Express.js backend with authentication and call management
 - **Device Client**: Python-based modem interface for call interception
-- **Database**: PostgreSQL with call logs, user management, and spam patterns
+- **Database**: MariaDB with call logs, user management, and spam patterns
 - **AI Engine**: TensorFlow.js for spam detection and voice analysis
 
 ### Call Flow Process
@@ -125,7 +125,7 @@ The installation process automatically creates a `.env` file with secure default
 
 ```env
 # Database Configuration
-DATABASE_URL=postgresql://filinewall:password@localhost:5432/filinewall
+DATABASE_URL=mysql://root:password@localhost:3306/filine_wall
 
 # Security
 JWT_SECRET=auto-generated-secure-key

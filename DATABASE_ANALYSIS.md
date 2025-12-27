@@ -1,14 +1,14 @@
 # 🗄️ Database Architecture Analysis for FiLine Wall
 
-## Current Setup: PostgreSQL ✅ (EXCELLENT CHOICE!)
+## Current Setup: MariaDB ✅ (EXCELLENT CHOICE!)
 
-FiLine Wall is **already configured with PostgreSQL** using Drizzle ORM. This is the **optimal choice** for your use case. Here's why:
+FiLine Wall is **now configured with MariaDB** using Drizzle ORM. This provides **simpler setup and cross-platform compatibility** while maintaining excellent performance. Here's why:
 
 ---
 
 ## 📊 Database Comparison for FiLine Wall
 
-### PostgreSQL (Current - RECOMMENDED) ⭐⭐⭐⭐⭐
+### MariaDB (Current - RECOMMENDED) ⭐⭐⭐⭐⭐
 
 **Why it's perfect for FiLine Wall:**
 
@@ -93,9 +93,9 @@ FiLine Wall is **already configured with PostgreSQL** using Drizzle ORM. This is
 
 ---
 
-## 🎯 Recommendation: KEEP PostgreSQL
+## 🎯 Recommendation: MariaDB (Current Setup)
 
-### Why PostgreSQL Wins for FiLine Wall
+### Why MariaDB Wins for FiLine Wall
 
 #### 1. **JSONB for ML/AI Data** 🧠
 ```typescript
@@ -207,7 +207,7 @@ WHERE ST_DWithin(
 
 ---
 
-## 📈 Performance Optimization for PostgreSQL
+## 📈 Performance Optimization for MariaDB
 
 ### 1. **Indexes for FiLine Wall** (Already optimal schema!)
 
@@ -361,23 +361,26 @@ Still tiny for PostgreSQL!
 
 ---
 
-## 🔧 PostgreSQL Setup for Raspberry Pi
+## 🔧 MariaDB Setup for Raspberry Pi
 
 ### Installation (Production-Ready)
 
 ```bash
-# Install PostgreSQL 15
+# Install MariaDB
 sudo apt update
-sudo apt install -y postgresql-15 postgresql-contrib-15
+sudo apt install -y mariadb-server mariadb-client
 
-# Start and enable
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
+# Start and enable MariaDB
+sudo systemctl start mariadb
+sudo systemctl enable mariadb
 
-# Create database and user
-sudo -u postgres psql << EOF
-CREATE DATABASE filinewall;
-CREATE USER filinewall WITH ENCRYPTED PASSWORD 'your-secure-password';
+# Secure MariaDB installation
+sudo mysql_secure_installation
+
+# Create database
+sudo mysql -u root -p << EOF
+CREATE DATABASE filine_wall;
+EOF
 GRANT ALL PRIVILEGES ON DATABASE filinewall TO filinewall;
 ALTER DATABASE filinewall OWNER TO filinewall;
 EOF

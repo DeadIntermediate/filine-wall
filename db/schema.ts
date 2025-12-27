@@ -1,9 +1,9 @@
-import { pgTable, text, serial, timestamp, boolean, jsonb, decimal, integer } from "drizzle-orm/pg-core";
+import { mysqlTable, text, int, timestamp, boolean, json, decimal } from "drizzle-orm/mysql-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 
 // User Management Tables
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
+export const users = mysqlTable("users", {
+  id: int("id").primaryKey().autoincrement(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   role: text("role").notNull().default('user'), // 'admin' or 'user'
@@ -11,145 +11,147 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastLogin: timestamp("last_login"),
   active: boolean("active").default(true),
-  preferences: jsonb("preferences"),
+  preferences: json("preferences"),
 });
 
-export const sessions = pgTable("sessions", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+export const sessions = mysqlTable("sessions", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   token: text("token").notNull().unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   expiresAt: timestamp("expires_at").notNull(),
   lastActivity: timestamp("last_activity"),
-  deviceInfo: jsonb("device_info"),
+  deviceInfo: json("device_info"),
 });
 
-export const accessControl = pgTable("access_control", {
-  id: serial("id").primaryKey(),
+export const accessControl = mysqlTable("access_control", {
+  id: int("id").primaryKey().autoincrement(),
   role: text("role").notNull(),
   resource: text("resource").notNull(),
-  permissions: jsonb("permissions").notNull(),
+  permissions: json("permissions").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const phoneNumbers = pgTable("phone_numbers", {
-  id: serial("id").primaryKey(),
+export const phoneNumbers = mysqlTable("phone_numbers", {
+  id: int("id").primaryKey().autoincrement(),
   number: text("number").notNull().unique(), // Added unique constraint
   type: text("type").notNull(), // blacklist or whitelist
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   active: boolean("active").default(true),
-  dncStatus: jsonb("dnc_status"), // Store DNC registry information
+  dncStatus: json("dnc_status"), // Store DNC registry information
   reputationScore: decimal("reputation_score", { precision: 5, scale: 2 }).default('50'),
   lastScoreUpdate: timestamp("last_score_update").defaultNow(),
-  scoreFactors: jsonb("score_factors"), // Store detailed scoring factors
-  callerIdInfo: jsonb("caller_id_info"), // Store caller ID information
-  blockingRules: jsonb("blocking_rules"), // Store custom blocking rules
+  scoreFactors: json("score_factors"), // Store detailed scoring factors
+  callerIdInfo: json("caller_id_info"), // Store caller ID information
+  blockingRules: json("blocking_rules"), // Store custom blocking rules
 });
 
-export const callLogs = pgTable("call_logs", {
-  id: serial("id").primaryKey(),
+export const callLogs = mysqlTable("call_logs", {
+  id: int("id").primaryKey().autoincrement(),
   phoneNumber: text("phone_number").notNull(),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   action: text("action").notNull(), // blocked, allowed
   duration: text("duration"),
-  metadata: jsonb("metadata"),
+  metadata: json("metadata"),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
-  callerId: jsonb("caller_id").notNull(), // Store structured caller ID data
-  carrierInfo: jsonb("carrier_info"), // Store carrier information
+  callerId: json("caller_id").notNull(), // Store structured caller ID data
+  carrierInfo: json("carrier_info"), // Store carrier information
   lineType: text("line_type"), // mobile, landline, voip, etc.
-  timeOfDay: integer("time_of_day"), // Hour of day (0-23) for pattern analysis
-  dayOfWeek: integer("day_of_week"), // Day of week (0-6) for pattern analysis
+  timeOfDay: int("time_of_day"), // Hour of day (0-23) for pattern analysis
+  dayOfWeek: int("day_of_week"), // Day of week (0-6) for pattern analysis
   deviceId: text("device_id"), // Reference to the device that processed this call
 });
 
-export const spamReports = pgTable("spam_reports", {
-  id: serial("id").primaryKey(),
+export const spamReports = mysqlTable("spam_reports", {
+  id: int("id").primaryKey().autoincrement(),
   phoneNumber: text("phone_number").notNull(),
   reportedAt: timestamp("reported_at").defaultNow().notNull(),
   category: text("category").notNull(), // e.g., 'telemarketing', 'scam', 'robocall'
   description: text("description"),
   status: text("status").default('pending').notNull(), // pending, verified, rejected
-  confirmations: integer("confirmations").default(1).notNull(),
-  metadata: jsonb("metadata"), // Additional report details
+  confirmations: int("confirmations").default(1).notNull(),
+  metadata: json("metadata"), // Additional report details
   reporterScore: decimal("reporter_score", { precision: 5, scale: 2 }), // Reputation score for reporter
   audioSampleUrl: text("audio_sample_url"), // URL to stored audio sample
-  location: jsonb("location"), // Reporter's location for geographic analysis
+  location: json("location"), // Reporter's location for geographic analysis
 });
 
-export const callPatterns = pgTable("call_patterns", {
-  id: serial("id").primaryKey(),
+export const callPatterns = mysqlTable("call_patterns", {
+  id: int("id").primaryKey().autoincrement(),
   phoneNumber: text("phone_number").notNull(),
   patternType: text("pattern_type").notNull(), // sequential, time-based, geographic
-  patternData: jsonb("pattern_data").notNull(), // Store pattern details
+  patternData: json("pattern_data").notNull(), // Store pattern details
   confidence: decimal("confidence", { precision: 5, scale: 2 }).notNull(),
   detectedAt: timestamp("detected_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   active: boolean("active").default(true),
 });
 
-export const geoRules = pgTable("geo_rules", {
-  id: serial("id").primaryKey(),
+export const geoRules = mysqlTable("geo_rules", {
+  id: int("id").primaryKey().autoincrement(),
   region: text("region").notNull(), // Country code or region identifier
   riskLevel: decimal("risk_level", { precision: 5, scale: 2 }).notNull(),
   blockingEnabled: boolean("blocking_enabled").default(false),
-  rules: jsonb("rules").notNull(), // Specific rules for the region
+  rules: json("rules").notNull(), // Specific rules for the region
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const verificationCodes = pgTable("verification_codes", {
-  id: serial("id").primaryKey(),
+export const verificationCodes = mysqlTable("verification_codes", {
+  id: int("id").primaryKey().autoincrement(),
   phoneNumber: text("phone_number").notNull(),
   code: text("code").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   expiresAt: timestamp("expires_at").notNull(),
   used: boolean("used").default(false),
   verifiedAt: timestamp("verified_at"),
-  metadata: jsonb("metadata"), // Store additional verification details
+  metadata: json("metadata"), // Store additional verification details
 });
 
-export const voicePatterns = pgTable("voice_patterns", {
-  id: serial("id").primaryKey(),
+export const voicePatterns = mysqlTable("voice_patterns", {
+  id: int("id").primaryKey().autoincrement(),
   patternType: text("pattern_type").notNull(), // 'robot', 'spam', 'legitimate'
-  features: jsonb("features").notNull(), // Store normalized feature vectors
+  features: json("features").notNull(), // Store normalized feature vectors
   confidence: decimal("confidence", { precision: 5, scale: 2 }).notNull(),
   language: text("language"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  metadata: jsonb("metadata"), // Additional pattern information
+  metadata: json("metadata"), // Additional pattern information
   active: boolean("active").default(true),
 });
 
-export const featureSettings = pgTable("feature_settings", {
-  id: serial("id").primaryKey(),
+export const featureSettings = mysqlTable("feature_settings", {
+  id: int("id").primaryKey().autoincrement(),
   featureKey: text("feature_key").notNull().unique(),
   isEnabled: boolean("is_enabled").default(true),
-  configuration: jsonb("configuration"), // Store feature-specific settings
-  displayOrder: integer("display_order"), // For ordering dashboard components
+  configuration: json("configuration"), // Store feature-specific settings
+  displayOrder: int("display_order"), // For ordering dashboard components
   category: text("category"), // For grouping features (e.g., 'dashboard', 'security')
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const deviceConfigurations = pgTable("device_configurations", {
-  id: serial("id").primaryKey(),
+export const deviceConfigurations = mysqlTable("device_configurations", {
+  id: int("id").primaryKey().autoincrement(),
   deviceId: text("device_id").notNull().unique(),
   name: text("name").notNull(),
-  ipAddress: text("ip_address").notNull(),
-  port: integer("port").notNull(),
-  deviceType: text("device_type").notNull(), // e.g., 'raspberry_pi', 'android', 'custom'
+  ipAddress: text("ip_address"), // Optional for USB devices
+  port: int("port"), // Optional for USB devices
+  devicePath: text("device_path"), // USB device path (e.g., /dev/ttyUSB0)
+  deviceType: text("device_type").notNull(), // e.g., 'raspberry_pi', 'android', 'usb_modem', 'custom'
+  connectionType: text("connection_type").default('network').notNull(), // 'network' or 'usb'
   status: text("status").default('offline').notNull(),
   lastHeartbeat: timestamp("last_heartbeat"),
   authToken: text("auth_token").notNull(),
-  settings: jsonb("settings"), // Store device-specific settings
+  settings: json("settings"), // Store device-specific settings
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const deviceRegistrations = pgTable("device_registrations", {
-  id: serial("id").primaryKey(),
+export const deviceRegistrations = mysqlTable("device_registrations", {
+  id: int("id").primaryKey().autoincrement(),
   deviceId: text("device_id").notNull().unique(),
   name: text("name").notNull(),
   deviceType: text("device_type").notNull(),
@@ -159,16 +161,16 @@ export const deviceRegistrations = pgTable("device_registrations", {
   status: text("status").notNull().default('pending'),
   registeredAt: timestamp("registered_at").defaultNow().notNull(),
   lastActive: timestamp("last_active"),
-  metadata: jsonb("metadata"),
+  metadata: json("metadata"),
 });
 
-export const userPreferences = pgTable("user_preferences", {
-  id: serial("id").primaryKey(),
+export const userPreferences = mysqlTable("user_preferences", {
+  id: int("id").primaryKey().autoincrement(),
   userId: text("user_id").notNull(),
-  quietHoursStart: integer("quiet_hours_start"),
-  quietHoursEnd: integer("quiet_hours_end"),
+  quietHoursStart: int("quiet_hours_start"),
+  quietHoursEnd: int("quiet_hours_end"),
   riskThreshold: decimal("risk_threshold", { precision: 5, scale: 2 }).default('0.7'),
-  blockCategories: jsonb("block_categories"), // Array of categories to block
+  blockCategories: json("block_categories"), // Array of categories to block
   allowKnownCallers: boolean("allow_known_callers").default(true),
   blockInternational: boolean("block_international").default(false),
   blockUnknown: boolean("block_unknown").default(false),
@@ -177,15 +179,15 @@ export const userPreferences = pgTable("user_preferences", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const blockingRules = pgTable("blocking_rules", {
-  id: serial("id").primaryKey(),
+export const blockingRules = mysqlTable("blocking_rules", {
+  id: int("id").primaryKey().autoincrement(),
   userId: text("user_id").notNull(),
   name: text("name").notNull(),
   description: text("description"),
   ruleType: text("rule_type").notNull(), // time, category, location, pattern
   isEnabled: boolean("is_enabled").default(true),
-  priority: integer("priority").default(0),
-  conditions: jsonb("conditions").notNull(), // Time ranges, categories, etc.
+  priority: int("priority").default(0),
+  conditions: json("conditions").notNull(), // Time ranges, categories, etc.
   action: text("action").notNull(), // block, allow, challenge
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

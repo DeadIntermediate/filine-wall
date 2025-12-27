@@ -28,9 +28,21 @@ import { DeviceDiagnosticTool } from "@/components/DeviceDiagnosticTool";
 
 const deviceSchema = z.object({
   name: z.string().min(1, "Device name is required"),
-  ipAddress: z.string().min(1, "IP address is required"),
-  port: z.coerce.number(),
-  deviceType: z.enum(["raspberry_pi", "android", "custom"]),
+  connectionType: z.enum(["network", "usb"]),
+  ipAddress: z.string().optional(),
+  port: z.coerce.number().optional(),
+  devicePath: z.string().optional(),
+  deviceType: z.enum(["raspberry_pi", "android", "usb_modem", "custom"]),
+}).refine((data) => {
+  if (data.connectionType === "network") {
+    return data.ipAddress && data.port;
+  } else if (data.connectionType === "usb") {
+    return data.devicePath;
+  }
+  return false;
+}, {
+  message: "Network devices require IP address and port, USB devices require device path",
+  path: ["connectionType"],
 });
 
 type DeviceFormData = z.infer<typeof deviceSchema>;
@@ -39,9 +51,11 @@ interface Device {
   id: string;
   deviceId: string;
   name: string;
-  ipAddress: string;
-  port: number;
-  deviceType: "raspberry_pi" | "android" | "custom";
+  ipAddress?: string;
+  port?: number;
+  devicePath?: string;
+  deviceType: "raspberry_pi" | "android" | "usb_modem" | "custom";
+  connectionType: "network" | "usb";
   status: "online" | "offline";
   lastHeartbeat: string | null;
 }
@@ -103,8 +117,10 @@ export function DeviceConfigPanel() {
     resolver: zodResolver(deviceSchema),
     defaultValues: {
       name: "",
+      connectionType: "network",
       ipAddress: "",
       port: 5000,
+      devicePath: "",
       deviceType: "raspberry_pi",
     },
   });
@@ -153,31 +169,85 @@ export function DeviceConfigPanel() {
 
                     <FormField
                       control={form.control}
-                      name="ipAddress"
+                      name="connectionType"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>IP Address</FormLabel>
-                          <FormControl>
-                            <Input placeholder="192.168.1.100" {...field} />
-                          </FormControl>
+                          <FormLabel>Connection Type</FormLabel>
+                          <Select
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              // Reset fields when connection type changes
+                              if (value === "network") {
+                                form.setValue("devicePath", "");
+                              } else {
+                                form.setValue("ipAddress", "");
+                                form.setValue("port", undefined);
+                              }
+                            }}
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select connection type" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="network">Network Device</SelectItem>
+                              <SelectItem value="usb">USB Modem</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="port"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Port</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {form.watch("connectionType") === "network" && (
+                      <>
+                        <FormField
+                          control={form.control}
+                          name="ipAddress"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>IP Address</FormLabel>
+                              <FormControl>
+                                <Input placeholder="192.168.1.100" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="port"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Port</FormLabel>
+                              <FormControl>
+                                <Input type="number" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </>
+                    )}
+
+                    {form.watch("connectionType") === "usb" && (
+                      <FormField
+                        control={form.control}
+                        name="devicePath"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Device Path</FormLabel>
+                            <FormControl>
+                              <Input placeholder="/dev/ttyUSB0 or COM3" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
 
                     <FormField
                       control={form.control}
@@ -195,9 +265,18 @@ export function DeviceConfigPanel() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="raspberry_pi">Raspberry Pi</SelectItem>
-                              <SelectItem value="android">Android Device</SelectItem>
-                              <SelectItem value="custom">Custom Device</SelectItem>
+                              {form.watch("connectionType") === "network" ? (
+                                <>
+                                  <SelectItem value="raspberry_pi">Raspberry Pi</SelectItem>
+                                  <SelectItem value="android">Android Device</SelectItem>
+                                  <SelectItem value="custom">Custom Network Device</SelectItem>
+                                </>
+                              ) : (
+                                <>
+                                  <SelectItem value="usb_modem">USB Modem (USRobotics, etc.)</SelectItem>
+                                  <SelectItem value="custom">Custom USB Device</SelectItem>
+                                </>
+                              )}
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -240,6 +319,8 @@ export function DeviceConfigPanel() {
                       <Server className="h-5 w-5" />
                     ) : device.deviceType === "android" ? (
                       <Smartphone className="h-5 w-5" />
+                    ) : device.deviceType === "usb_modem" ? (
+                      <Activity className="h-5 w-5" />
                     ) : (
                       <Laptop className="h-5 w-5" />
                     )}
@@ -277,14 +358,20 @@ export function DeviceConfigPanel() {
 
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Wifi className="h-4 w-4" />
-                        <span>Address:</span>
+                        {device.connectionType === "network" ? (
+                          <Wifi className="h-4 w-4" />
+                        ) : (
+                          <Activity className="h-4 w-4" />
+                        )}
+                        <span>Connection:</span>
                         <span className="font-medium">
-                          {device.ipAddress}:{device.port}
+                          {device.connectionType === "network"
+                            ? `${device.ipAddress}:${device.port}`
+                            : device.devicePath}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Activity className="h-4 w-4" />
+                        <Clock className="h-4 w-4" />
                         <span>Last Activity:</span>
                         <span className="font-medium">
                           {device.lastHeartbeat

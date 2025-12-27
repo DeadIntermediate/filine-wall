@@ -866,7 +866,7 @@ export async function registerRoutes(app: Express): Server {
 
   // Add new device (moved to /api/admin)
   app.post("/api/admin/devices", async (req, res) => {
-    const { name, ipAddress, port, deviceType } = req.body;
+    const { name, connectionType, ipAddress, port, devicePath, deviceType } = req.body;
 
     // Generate a unique device ID and auth token
     const deviceId = `device_${randomBytes(8).toString('hex')}`;
@@ -877,9 +877,11 @@ export async function registerRoutes(app: Express): Server {
       .values({
         deviceId,
         name,
-        ipAddress,
-        port,
+        ipAddress: connectionType === 'network' ? ipAddress : null,
+        port: connectionType === 'network' ? port : null,
+        devicePath: connectionType === 'usb' ? devicePath : null,
         deviceType,
+        connectionType,
         authToken,
         status: 'offline',
       })
