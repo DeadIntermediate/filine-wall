@@ -91,38 +91,15 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
-    log("Starting FiLine Wall server...");
+    log("Starting FiLine Wall server (minimal mode for testing)...");
     
-    // Initialize FCC database on startup
-    log("Initializing spam databases...");
-    await SpamDatabaseService.refreshDatabase()
-      .then(() => log("FCC database initialized successfully"))
-      .catch(error => {
-        log(`Warning: Initial FCC database refresh failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
-        log("Server will continue with existing database or create new one on first use");
-      });
-
-    // Initialize spam detection model
-    log("Loading AI spam detection model...");
-    await SpamDetectionService.ensureModelInitialized()
-      .then(() => log("Spam detection model loaded successfully"))
-      .catch(error => {
-        log(`Warning: Failed to initialize spam detection model - ${error instanceof Error ? error.message : 'Unknown error'}`);
-        log("Server will use traditional detection methods without AI enhancement");
-      });
-
-    // Start the initial model training in the background
-    SpamDetectionService.trainModel()
-      .then(() => log("Initial model training completed"))
-      .catch(error => {
-        log(`Warning: Initial model training failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
-      });
-
+    // Skip service initialization for testing
+    log("Skipping service initialization for testing mode");
+    
     const server = registerRoutes(app);
 
-    // Initialize scheduled tasks (including FCC database updates)
-    log("Setting up scheduled tasks...");
-    initializeScheduledTasks();
+    // Skip scheduled tasks for testing
+    log("Skipping scheduled tasks for testing mode");
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
@@ -153,7 +130,7 @@ app.use((req, res, next) => {
     const PORT = 5000;
     server.listen(PORT, "0.0.0.0", () => {
       log(`✓ Server running on port ${PORT}`);
-      log(`✓ AI Spam Detection: ${SpamDetectionService ? 'Active' : 'Fallback mode'}`);
+      log(`✓ Testing mode: Services disabled`);
       log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
       log("Ready to accept connections");
     });

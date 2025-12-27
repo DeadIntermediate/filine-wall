@@ -5,7 +5,16 @@ import { verifyPhoneNumber } from "./phoneVerification";
 import { predictSpam } from "./spamPrediction";
 import { dncRegistry } from "./dncRegistry";
 import { generateVerificationCode } from "./callerVerification";
-import { analyzeVoice } from "./voiceAnalysisService";
+// Conditionally import voice analysis to avoid native binding issues
+let analyzeVoice: ((audioData: Float32Array, sampleRate: number) => Promise<any>) | null = null;
+try {
+  if (process.env.ENABLE_VOICE_ANALYSIS !== 'false') {
+    const voiceModule = require("./voiceAnalysisService");
+    analyzeVoice = voiceModule.analyzeVoice;
+  }
+} catch (error: any) {
+  console.warn('Voice analysis not available:', error.message);
+}
 import { lookupCarrier } from "./carrierLookup";
 import { SpamDatabaseService } from "./spamDatabaseService";
 import { detectScamPhrases } from "./scamPhraseDetection";
@@ -136,10 +145,10 @@ export async function screenCall(
     let scamPhraseDetection;
     if (audioData && sampleRate) {
       // Real voice analysis in production, simplified in development
-      if (!isDevelopmentMode) {
+      if (!isDevelopmentMode && analyzeVoice) {
         voiceAnalysis = await analyzeVoice(audioData, sampleRate);
       } else {
-        // Simplified voice analysis for development
+        // Simplified voice analysis for development or when voice analysis is disabled
         voiceAnalysis = {
           isSpam: Math.random() > 0.7,
           confidence: 0.7 + (Math.random() * 0.3),

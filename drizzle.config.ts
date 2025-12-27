@@ -7,7 +7,7 @@ if (!process.env.DATABASE_URL) {
 export default defineConfig({
   out: "./migrations",
   schema: "./db/schema.ts",
-  dialect: "postgresql",
+  dialect: process.env.NODE_ENV === 'test' ? "sqlite" : "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL,
   },
